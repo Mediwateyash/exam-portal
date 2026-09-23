@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: examdesk
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        value: mongodb+srv://diwateyash2004_db_user:admin123@cluster0.cxer5y3.mongodb.net/examdesk?retryWrites=true&w=majority&appName=Cluster0
+      - key: JWT_SECRET
+        value: examdesk_super_secret_jwt_key_2026
