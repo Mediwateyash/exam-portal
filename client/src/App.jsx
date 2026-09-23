@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Components
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // Auth Pages
@@ -33,9 +34,12 @@ function AppLayout({ children }) {
   const isTakingExam = location.pathname.includes('/take');
 
   return (
-    <div className="app-container">
+    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       {!isTakingExam && <Navbar />}
-      {children}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {children}
+      </div>
+      {!isTakingExam && <Footer />}
     </div>
   );
 }

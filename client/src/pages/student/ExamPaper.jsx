@@ -473,9 +473,13 @@ export default function ExamPaper() {
             </div>
           </div>
 
-          <Link to="/student/my-exams" className="btn btn-primary btn-lg" style={{ display: 'inline-flex' }}>
+          <Link to="/student/my-exams" className="btn btn-primary btn-lg" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
             Return to My Exams Dashboard
           </Link>
+
+          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+            ExamDesk • Designed &amp; Developed by <strong style={{ color: '#64748b' }}>Yash Diwate</strong>
+          </div>
         </div>
       </div>
     );
@@ -830,6 +834,24 @@ export default function ExamPaper() {
                 Clear Response
               </button>
             </div>
+          </div>
+
+          {/* Institutional Paper Sheet Footer */}
+          <div style={{
+            padding: '0.85rem 1.5rem',
+            background: '#f8fafc',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            fontSize: '0.75rem',
+            color: '#64748b',
+            userSelect: 'none'
+          }}>
+            <span>ExamDesk Secure Examination Environment</span>
+            <span>Designed &amp; Developed by <strong style={{ color: '#1d4ed8' }}>Yash Diwate</strong></span>
           </div>
         </div>
 
