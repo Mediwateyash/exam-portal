@@ -41,10 +41,22 @@ export default function ExamInstructions() {
     loadInstructions();
   }, [id, navigate]);
 
-  const handleStartExam = () => {
+  const handleStartExam = async () => {
     if (!agreed) {
       alert('Please check the confirmation box to acknowledge exam regulations.');
       return;
+    }
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Fullscreen request denied or not supported by browser:', err);
     }
     navigate(`/exam/${id}/take`);
   };
@@ -213,6 +225,7 @@ export default function ExamInstructions() {
           <div style={{ fontSize: '0.875rem', color: '#991b1b' }}>
             <strong>Strict Exam Security Policy:</strong>
             <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
+              <li><strong>Mandatory Fullscreen:</strong> The examination must be taken in Fullscreen Mode. Entering the exam will automatically request fullscreen. Exiting fullscreen or minimizing during the exam will be recorded as a security policy violation.</li>
               <li><strong>Tab Switching:</strong> Navigating away from this exam or switching browser tabs is strictly tracked. The 1st tab switch issues an official warning. The 2nd tab switch will <strong>immediately cancel and terminate</strong> your examination session.</li>
               <li><strong>Clipboard & Copy Protection:</strong> Copying, cutting, dragging, and pasting text or code into the examination paper is completely prohibited and blocked. All code and explanations must be typed directly.</li>
             </ul>

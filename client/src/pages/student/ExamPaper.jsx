@@ -19,7 +19,8 @@ import {
   GraduationCap,
   ShieldAlert,
   AlertTriangle,
-  XCircle
+  XCircle,
+  Maximize
 } from 'lucide-react';
 import '../../styles/exampaper.css';
 
@@ -42,6 +43,23 @@ export default function ExamPaper() {
   const [isCancelled, setIsCancelled] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [securityNotice, setSecurityNotice] = useState(null);
+  const [isFullscreen, setIsFullscreen] = useState(Boolean(document.fullscreenElement || document.webkitFullscreenElement));
+
+  const enterFullscreen = async () => {
+    try {
+      const elem = document.documentElement;
+      if (elem.requestFullscreen) {
+        await elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) {
+        await elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) {
+        await elem.msRequestFullscreen();
+      }
+      setIsFullscreen(true);
+    } catch (err) {
+      console.warn('Could not enter fullscreen:', err);
+    }
+  };
 
   // Timer State
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -151,12 +169,27 @@ export default function ExamPaper() {
     }
   };
 
-  // 3. Security Event Listeners (Tab visibility, print deterrence, keyboard shortcuts)
+  // 3. Security Event Listeners (Tab visibility, fullscreen changes, print deterrence, keyboard shortcuts)
   useEffect(() => {
     if (loading || isCancelled || !submissionId) return;
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        handleTabViolation();
+      }
+    };
+
+    const handleFullscreenChange = () => {
+      const inFs = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+      );
+      setIsFullscreen(inFs);
+
+      if (!inFs && !isSubmittingRef.current && !isCancelledRef.current && !loading) {
+        showSecurityNotice('Fullscreen mode exited! Please return to fullscreen.');
         handleTabViolation();
       }
     };
@@ -186,11 +219,15 @@ export default function ExamPaper() {
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
@@ -296,6 +333,9 @@ export default function ExamPaper() {
 
       const res = await api.submitExam(id, formattedAnswers, 0);
       setShowSubmitModal(false);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        try { await document.exitFullscreen(); } catch (e) {}
+      }
       navigate(`/exam/${id}/submitted`, { state: { submission: res.submission, isAuto } });
     } catch (err) {
       alert(err.message || 'Error occurred while submitting examination.');
@@ -514,6 +554,40 @@ export default function ExamPaper() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          {isFullscreen ? (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              background: '#ecfdf5',
+              color: '#059669',
+              border: '1px solid #a7f3d0',
+              borderRadius: '6px',
+              padding: '0.35rem 0.65rem',
+              fontSize: '0.75rem',
+              fontWeight: '700'
+            }}>
+              <Maximize size={13} />
+              <span>Fullscreen Active</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="btn btn-warning btn-sm"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.75rem'
+              }}
+            >
+              <Maximize size={13} />
+              <span>Enter Fullscreen</span>
+            </button>
+          )}
+
           {tabSwitchCount > 0 && (
             <div style={{
               display: 'flex',
@@ -860,6 +934,75 @@ export default function ExamPaper() {
               style={{ width: '100%', justifyContent: 'center' }}
             >
               I Understand — Return to Examination
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* FULLSCREEN REQUIRED MODAL */}
+      {!isFullscreen && !loading && !isCancelled && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.88)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9998,
+          padding: '1rem'
+        }}>
+          <div style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            maxWidth: '480px',
+            width: '100%',
+            padding: '2.25rem 2rem',
+            textAlign: 'center',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
+            border: '2px solid #3b82f6'
+          }}>
+            <div style={{
+              width: '60px',
+              height: '60px',
+              borderRadius: '50%',
+              background: '#eff6ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1.25rem'
+            }}>
+              <Maximize size={32} color="#2563eb" />
+            </div>
+
+            <span className="badge badge-primary" style={{ fontSize: '0.8125rem', marginBottom: '0.75rem' }}>
+              Proctoring Requirement
+            </span>
+
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', marginBottom: '0.75rem' }}>
+              Fullscreen Mode Required
+            </h2>
+
+            <p style={{ color: '#475569', fontSize: '0.9375rem', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+              ExamDesk enforces fullscreen mode during active examinations to protect institutional integrity. Navigating away or exiting fullscreen is monitored.
+            </p>
+
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="btn btn-primary btn-lg"
+              style={{
+                width: '100%',
+                justifyContent: 'center',
+                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+              }}
+            >
+              <Maximize size={18} />
+              Enter Fullscreen Examination
             </button>
           </div>
         </div>
