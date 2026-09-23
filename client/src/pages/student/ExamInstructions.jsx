@@ -29,7 +29,7 @@ export default function ExamInstructions() {
         const res = await api.getExamInstructions(id);
         setExamData(res.exam);
         setStats(res.stats || {});
-        if (res.submission && (res.submission.status === 'submitted' || res.submission.status === 'graded')) {
+        if (res.submission && (res.submission.status === 'submitted' || res.submission.status === 'graded' || res.submission.status === 'cancelled' || res.submission.is_cancelled)) {
           navigate(`/student/results/${res.submission.id}`);
         }
       } catch (err) {
@@ -190,12 +190,32 @@ export default function ExamInstructions() {
           padding: '1rem 1.25rem',
           display: 'flex',
           gap: '0.75rem',
-          marginBottom: '1.75rem'
+          marginBottom: '1rem'
         }}>
           <AlertTriangle size={20} color="#b45309" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '0.875rem', color: '#92400e' }}>
             <strong>Important Timer Notice:</strong> The countdown timer will start immediately once you click <strong>Start Examination</strong>.
             Do not reload or navigate away from the test paper. When the timer hits <strong>00:00:00</strong>, your exam will be automatically submitted.
+          </div>
+        </div>
+
+        {/* Security & Integrity Policy Notice */}
+        <div style={{
+          background: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '1rem 1.25rem',
+          display: 'flex',
+          gap: '0.75rem',
+          marginBottom: '1.75rem'
+        }}>
+          <ShieldAlert size={20} color="#dc2626" style={{ flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ fontSize: '0.875rem', color: '#991b1b' }}>
+            <strong>Strict Exam Security Policy:</strong>
+            <ul style={{ margin: '0.4rem 0 0 1.2rem', padding: 0 }}>
+              <li><strong>Tab Switching:</strong> Navigating away from this exam or switching browser tabs is strictly tracked. The 1st tab switch issues an official warning. The 2nd tab switch will <strong>immediately cancel and terminate</strong> your examination session.</li>
+              <li><strong>Clipboard & Copy Protection:</strong> Copying, cutting, dragging, and pasting text or code into the examination paper is completely prohibited and blocked. All code and explanations must be typed directly.</li>
+            </ul>
           </div>
         </div>
 

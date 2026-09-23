@@ -69,6 +69,10 @@ export const api = {
   startExam: (examId) => request(`/student/exams/${examId}/start`, { method: 'POST' }),
   submitExam: (examId, answers, timeSpentSeconds) =>
     request(`/student/exams/${examId}/submit`, { method: 'POST', body: { answers, timeSpentSeconds } }),
+  recordSecurityViolation: (examId, violationType = 'tab_switch') =>
+    request(`/student/exams/${examId}/security-violation`, { method: 'POST', body: { violationType } }),
+  saveAnswers: (examId, answers) =>
+    request(`/student/exams/${examId}/save-answers`, { method: 'POST', body: { answers } }),
 
   // Submissions & Evaluation (Admin)
   getSubmissions: (examId = null, status = null) => {

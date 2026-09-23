@@ -186,11 +186,15 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
 
     let submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
 
-    if (submission && submission.submitted_at) {
+    if (submission && (submission.submitted_at || submission.is_cancelled)) {
       return res.status(400).json({
-        error: 'You have already completed and submitted this examination.',
+        error: submission.is_cancelled
+          ? 'This examination was cancelled due to security policy violations.'
+          : 'You have already completed and submitted this examination.',
         submissionId: submission._id.toString(),
-        status: submission.status
+        status: submission.status,
+        isCancelled: submission.is_cancelled || false,
+        cancelReason: submission.cancel_reason || null
       });
     }
 
@@ -287,6 +291,8 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
       submissionId: submission._id.toString(),
       startedAt,
       remainingSeconds,
+      tabSwitchCount: submission.tab_switch_count || 0,
+      isCancelled: submission.is_cancelled || false,
       questions,
       sections,
       savedAnswers: answersMap
@@ -294,6 +300,126 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
   } catch (err) {
     console.error('Start exam error:', err);
     return res.status(500).json({ error: 'Failed to start examination session.' });
+  }
+});
+
+// 5b. Record Security Violation (Tab Switch)
+router.post('/exams/:id/security-violation', requireStudent, async (req, res) => {
+  try {
+    const examId = req.params.id;
+    const studentId = req.user.id;
+    const { violationType } = req.body;
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found.' });
+    }
+
+    // Atomic increment tab_switch_count ONLY if not already submitted or cancelled
+    const submission = await ExamSubmission.findOneAndUpdate(
+      { exam_id: exam._id, student_id: studentId, submitted_at: null, is_cancelled: { $ne: true } },
+      { $inc: { tab_switch_count: 1 } },
+      { new: true }
+    );
+
+    if (!submission) {
+      const existing = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
+      if (existing && existing.is_cancelled) {
+        return res.json({
+          tabSwitchCount: existing.tab_switch_count,
+          isCancelled: true,
+          action: 'cancelled',
+          message: 'Exam has already been cancelled.'
+        });
+      }
+      return res.status(400).json({ error: 'No active examination session found.' });
+    }
+
+    if (submission.tab_switch_count >= 2) {
+      submission.is_cancelled = true;
+      submission.cancel_reason = 'Exceeded maximum permitted tab switches (2)';
+      submission.status = 'cancelled';
+      submission.submitted_at = new Date();
+      await submission.save();
+
+      await ExamRegistration.updateOne(
+        { exam_id: exam._id, student_id: studentId },
+        { status: 'completed' }
+      );
+
+      return res.json({
+        tabSwitchCount: submission.tab_switch_count,
+        isCancelled: true,
+        action: 'cancelled',
+        message: 'Exam has been cancelled due to repeated tab switch violations.'
+      });
+    }
+
+    return res.json({
+      tabSwitchCount: submission.tab_switch_count,
+      isCancelled: false,
+      action: 'warning',
+      message: 'Tab switch detected. Warning 1 of 1. A second tab switch will immediately cancel your exam.'
+    });
+  } catch (err) {
+    console.error('Security violation error:', err);
+    return res.status(500).json({ error: 'Failed to record security violation.' });
+  }
+});
+
+// 5c. Save Student Answers (Preserves answers during cancellation or background persistence)
+router.post('/exams/:id/save-answers', requireStudent, async (req, res) => {
+  try {
+    const examId = req.params.id;
+    const studentId = req.user.id;
+    const { answers } = req.body;
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found.' });
+    }
+
+    const submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
+    if (!submission) {
+      return res.status(404).json({ error: 'Submission session not found.' });
+    }
+
+    const modules = await Module.find({ exam_id: exam._id }).select('_id');
+    const moduleIds = modules.map(m => m._id);
+    const examQuestions = await Question.find({ module_id: { $in: moduleIds } });
+    const questionsMap = {};
+    examQuestions.forEach(q => { questionsMap[q._id.toString()] = q; });
+
+    const answersList = Array.isArray(answers) ? answers : Object.values(answers || {});
+    let savedCount = 0;
+
+    for (const item of answersList) {
+      const qId = item.questionId?.toString();
+      const q = questionsMap[qId];
+      if (!q) continue;
+
+      const userAns = item.answer !== undefined && item.answer !== null ? String(item.answer).trim() : '';
+      const lang = item.language || (q.type === 'coding' ? 'javascript' : null);
+      const wordCount = q.type === 'theory' && userAns ? userAns.trim().split(/\s+/).filter(Boolean).length : 0;
+
+      await StudentAnswer.findOneAndUpdate(
+        { submission_id: submission._id, question_id: q._id },
+        {
+          answer: userAns,
+          language: lang,
+          word_count: wordCount,
+          marks_obtained: 0,
+          is_evaluated: false
+        },
+        { upsert: true, new: true }
+      );
+      savedCount++;
+    }
+
+    return res.json({ message: 'Answers saved successfully.', savedCount });
+  } catch (err) {
+    console.error('Save answers error:', err);
+    return res.status(500).json({ error: 'Failed to save answers.' });
   }
 });
 
@@ -312,6 +438,14 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
     const submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
     if (!submission) {
       return res.status(400).json({ error: 'No active examination session found to submit.' });
+    }
+
+    if (submission.is_cancelled || submission.submitted_at) {
+      return res.status(400).json({
+        error: submission.is_cancelled
+          ? 'This examination was cancelled due to security policy violations and cannot be submitted.'
+          : 'This examination has already been submitted.'
+      });
     }
 
     const modules = await Module.find({ exam_id: exam._id }).select('_id');

@@ -25,3 +25,8 @@ yarn-error.log*
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Agent Brain & Memory Docs (Internal)
+*brain*.md
+project_brain.md
+

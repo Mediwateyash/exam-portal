@@ -36,8 +36,20 @@ const ExamSubmissionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['in_progress', 'submitted', 'evaluating', 'graded'],
+    enum: ['in_progress', 'submitted', 'evaluating', 'graded', 'cancelled'],
     default: 'in_progress'
+  },
+  tab_switch_count: {
+    type: Number,
+    default: 0
+  },
+  is_cancelled: {
+    type: Boolean,
+    default: false
+  },
+  cancel_reason: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

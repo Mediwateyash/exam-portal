@@ -94,7 +94,7 @@ export default function EvaluateSubmission() {
 
     try {
       const evalList = Object.keys(evaluations).map(qId => ({
-        questionId: parseInt(qId, 10),
+        questionId: qId,
         marksObtained: evaluations[qId].marksObtained,
         teacherRemarks: evaluations[qId].teacherRemarks
       }));
@@ -158,10 +158,24 @@ export default function EvaluateSubmission() {
           gap: '1rem'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-              <span className={`badge ${sub.status === 'graded' ? 'badge-success' : 'badge-warning'}`}>
-                {sub.status === 'graded' ? 'Graded' : 'Pending Theory Review'}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+              <span className={`badge ${
+                sub.status === 'graded' ? 'badge-success' :
+                sub.status === 'cancelled' || sub.is_cancelled ? 'badge-danger' : 'badge-warning'
+              }`}>
+                {sub.status === 'graded' ? 'Graded' :
+                 sub.status === 'cancelled' || sub.is_cancelled ? 'Exam Cancelled' : 'Pending Theory Review'}
               </span>
+              {sub.tab_switch_count > 0 && (
+                <span className="badge badge-secondary" style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>
+                  Tab Switches: {sub.tab_switch_count}
+                </span>
+              )}
+              {sub.cancel_reason && (
+                <span className="badge badge-secondary" style={{ background: '#fff1f2', color: '#e11d48', border: '1px solid #ffe4e6' }}>
+                  Reason: {sub.cancel_reason}
+                </span>
+              )}
               <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>Submission ID: #{sub.id}</span>
             </div>
             <h1 style={{ fontSize: '1.75rem', fontWeight: '800', color: '#0f172a' }}>

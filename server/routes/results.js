@@ -45,6 +45,9 @@ router.get('/', requireStudent, async (req, res) => {
         total_marks: s.total_marks,
         percentage: s.percentage,
         status: s.status,
+        tab_switch_count: s.tab_switch_count || 0,
+        is_cancelled: s.is_cancelled || false,
+        cancel_reason: s.cancel_reason || null,
         exam_title: exam.title,
         exam_description: exam.description,
         exam_duration: exam.duration,
@@ -129,6 +132,9 @@ router.get('/:submissionId', requireStudent, async (req, res) => {
         total_marks: submission.total_marks,
         percentage: submission.percentage,
         status: submission.status,
+        tab_switch_count: submission.tab_switch_count || 0,
+        is_cancelled: submission.is_cancelled || false,
+        cancel_reason: submission.cancel_reason || null,
         isPassed
       },
       answers: breakdown

@@ -15,7 +15,8 @@ export default function CodeEditor({
   language = 'javascript',
   onLanguageChange,
   readOnly = false,
-  minHeight = '300px'
+  minHeight = '300px',
+  isExamMode = false
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -99,22 +100,24 @@ export default function CodeEditor({
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="btn btn-secondary btn-sm"
-            style={{
-              background: '#1e293b',
-              color: '#94a3b8',
-              borderColor: '#475569',
-              padding: '0.2rem 0.5rem',
-              fontSize: '0.75rem'
-            }}
-            title="Copy code"
-          >
-            {copied ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
-            {copied ? 'Copied' : 'Copy'}
-          </button>
+          {!isExamMode && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="btn btn-secondary btn-sm"
+              style={{
+                background: '#1e293b',
+                color: '#94a3b8',
+                borderColor: '#475569',
+                padding: '0.2rem 0.5rem',
+                fontSize: '0.75rem'
+              }}
+              title="Copy code"
+            >
+              {copied ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -141,6 +144,26 @@ export default function CodeEditor({
           value={value}
           onChange={(e) => onChange && onChange(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={(e) => {
+            if (isExamMode) {
+              e.preventDefault();
+            }
+          }}
+          onCopy={(e) => {
+            if (isExamMode) {
+              e.preventDefault();
+            }
+          }}
+          onCut={(e) => {
+            if (isExamMode) {
+              e.preventDefault();
+            }
+          }}
+          onDrop={(e) => {
+            if (isExamMode) {
+              e.preventDefault();
+            }
+          }}
           readOnly={readOnly}
           placeholder="// Type your code solution here..."
           className="code-textarea"
