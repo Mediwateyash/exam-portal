@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import { getClientLocation } from '../../utils/geo';
 import { 
   BookOpen, 
   Clock, 
@@ -48,7 +49,8 @@ export default function StudentDashboard() {
     setSuccessMsg('');
 
     try {
-      await api.registerExam(examId);
+      const location = await getClientLocation();
+      await api.registerExam(examId, location);
       setSuccessMsg('You have successfully registered for the examination!');
       await loadExams();
       setTimeout(() => setSuccessMsg(''), 4000);

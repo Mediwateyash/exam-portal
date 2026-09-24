@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { GraduationCap, Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { getClientLocation } from '../../utils/geo';
+import { GraduationCap, Lock, Mail, ArrowRight, AlertCircle, MapPin } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -24,7 +25,10 @@ export default function Login() {
     setError('');
 
     try {
-      const user = await login(email, password);
+      // Capture exact GPS location for proctoring audit log
+      const clientLocation = await getClientLocation();
+
+      const user = await login(email, password, clientLocation);
       const from = location.state?.from?.pathname;
       if (from) {
         navigate(from, { replace: true });
@@ -129,6 +133,19 @@ export default function Login() {
               {loading ? 'Authenticating...' : 'Sign In'}
               {!loading && <ArrowRight size={16} />}
             </button>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              marginTop: '0.75rem',
+              fontSize: '0.75rem',
+              color: '#64748b'
+            }}>
+              <MapPin size={13} color="#2563eb" />
+              <span>Location telemetry verified for examination proctoring audit.</span>
+            </div>
           </form>
 
           <div style={{

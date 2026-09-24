@@ -22,6 +22,13 @@ const UserSchema = new mongoose.Schema({
     enum: ['admin', 'student'],
     required: true,
     default: 'student'
+  },
+  last_location: {
+    latitude: Number,
+    longitude: Number,
+    accuracy: Number,
+    maps_url: String,
+    address: String
   }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

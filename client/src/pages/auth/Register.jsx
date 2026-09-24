@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { GraduationCap, Lock, Mail, User, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { getClientLocation } from '../../utils/geo';
+import { GraduationCap, Lock, Mail, User, ArrowRight, AlertCircle, CheckCircle2, MapPin } from 'lucide-react';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -36,7 +37,10 @@ export default function Register() {
     setError('');
 
     try {
-      await register(name, email, password, confirmPassword);
+      // Capture exact GPS location for proctoring verification
+      const location = await getClientLocation();
+
+      await register(name, email, password, confirmPassword, location);
       setSuccess('Account created successfully! Redirecting to login...');
       setTimeout(() => {
         navigate('/login');
@@ -180,6 +184,19 @@ export default function Register() {
               {loading ? 'Creating Account...' : 'Register Student Account'}
               {!loading && <ArrowRight size={16} />}
             </button>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.4rem',
+              marginTop: '0.75rem',
+              fontSize: '0.75rem',
+              color: '#64748b'
+            }}>
+              <MapPin size={13} color="#2563eb" />
+              <span>Exact GPS location is securely logged for proctoring audit.</span>
+            </div>
           </form>
 
           <div style={{

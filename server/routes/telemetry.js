@@ -48,6 +48,8 @@ router.post('/event', requireStudent, async (req, res) => {
       targetModule = await Module.findById(question.module_id).lean();
     }
 
+    const location = req.body.location || student.last_location || null;
+
     // Save Telemetry Log to MongoDB
     await TelemetryLog.create({
       student_id: student._id,
@@ -61,6 +63,7 @@ router.post('/event', requireStudent, async (req, res) => {
         previousAnswer: previousAnswer !== undefined ? String(previousAnswer).substring(0, 500) : '',
         wordCount: Number(wordCount) || 0,
         totalElapsedSeconds: Number(totalElapsedSeconds) || 0,
+        location: location || null,
         ...(details || {})
       },
       ip_address: req.ip || req.headers['x-forwarded-for'] || '',
@@ -81,7 +84,8 @@ router.post('/event', requireStudent, async (req, res) => {
         previousAnswer,
         timeSpentSeconds: Number(timeSpentSeconds) || 0,
         totalElapsedSeconds: Number(totalElapsedSeconds) || 0,
-        wordCount: Number(wordCount) || 0
+        wordCount: Number(wordCount) || 0,
+        location
       }).catch(err => console.warn('[Telegram Telemetry Notification Failed]:', err.message));
     }
 

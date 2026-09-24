@@ -43,6 +43,26 @@ class TelegramBotService {
     return parts.join(' ');
   }
 
+  formatLocation(location) {
+    if (!location) return null;
+    const lat = location.latitude || location.lat;
+    const lng = location.longitude || location.lng || location.lon;
+    const accuracy = location.accuracy ? ` (±${Math.round(location.accuracy)}m)` : '';
+    const address = location.address ? `\n📍 <b>Address:</b> <i>${this.escapeHtml(location.address)}</i>` : '';
+
+    if (lat && lng) {
+      const mapsUrl = location.maps_url || location.mapsUrl || `https://www.google.com/maps?q=${lat},${lng}`;
+      return `📍 <b>Location:</b> <a href="${mapsUrl}">Google Maps Link</a> (<code>${lat}, ${lng}</code>${accuracy})${address}`;
+    }
+
+    if (location.city || location.country) {
+      const cityStr = [location.city, location.region, location.country].filter(Boolean).join(', ');
+      return `📍 <b>Location:</b> <i>${this.escapeHtml(cityStr)}</i>`;
+    }
+
+    return null;
+  }
+
   escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -70,7 +90,7 @@ class TelegramBotService {
           chat_id: targetChatId,
           text: htmlText,
           parse_mode: 'HTML',
-          disable_web_page_preview: true
+          disable_web_page_preview: false
         })
       });
 
@@ -87,13 +107,38 @@ class TelegramBotService {
   }
 
   /**
-   * 1. Notify on Student / User Login
+   * 1. Notify on Student / User Registration
    */
-  async notifyLogin({ user, ip, userAgent }) {
+  async notifyRegistration({ user, ip, location, userAgent }) {
+    if (!this.isConfigured) return;
+
+    const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
+    const locationLine = this.formatLocation(location);
+
+    const msg = [
+      `🎉 <b>NEW STUDENT REGISTRATION</b>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `👤 <b>Name:</b> ${this.escapeHtml(user.name)}`,
+      `📧 <b>Email:</b> <code>${this.escapeHtml(user.email)}</code>`,
+      `🏷️ <b>Role:</b> 🎓 [STUDENT]`,
+      locationLine,
+      `🌐 <b>IP Address:</b> <code>${this.escapeHtml(ip || 'Unknown IP')}</code>`,
+      `💻 <b>Device:</b> <i>${this.escapeHtml((userAgent || 'Browser').substring(0, 80))}</i>`,
+      `⏰ <b>Timestamp:</b> ${now} (IST)`
+    ].filter(Boolean).join('\n');
+
+    await this.sendMessage(msg);
+  }
+
+  /**
+   * 2. Notify on Student / User Login
+   */
+  async notifyLogin({ user, ip, location, userAgent }) {
     if (!this.isConfigured) return;
 
     const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
     const roleEmoji = user.role === 'admin' ? '🛡️ [ADMIN]' : '🎓 [STUDENT]';
+    const locationLine = this.formatLocation(location);
 
     const msg = [
       `🔔 <b>USER AUTHENTICATION LOG</b>`,
@@ -101,22 +146,47 @@ class TelegramBotService {
       `👤 <b>Name:</b> ${this.escapeHtml(user.name)}`,
       `📧 <b>Email:</b> <code>${this.escapeHtml(user.email)}</code>`,
       `🏷️ <b>Role:</b> ${roleEmoji}`,
+      locationLine,
       `🌐 <b>IP Address:</b> <code>${this.escapeHtml(ip || 'Unknown IP')}</code>`,
-      `💻 <b>User-Agent:</b> <i>${this.escapeHtml((userAgent || 'Unknown Device').substring(0, 100))}</i>`,
+      `💻 <b>Device:</b> <i>${this.escapeHtml((userAgent || 'Browser').substring(0, 80))}</i>`,
       `⏰ <b>Timestamp:</b> ${now} (IST)`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     await this.sendMessage(msg);
   }
 
   /**
-   * 2. Notify on Exam or Module Start
+   * 3. Notify on Exam Registration / Enrollment
    */
-  async notifyExamStart({ student, exam, targetModule, attemptNumber, duration }) {
+  async notifyExamRegistration({ student, exam, ip, location }) {
+    if (!this.isConfigured) return;
+
+    const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
+    const locationLine = this.formatLocation(location);
+
+    const msg = [
+      `📝 <b>EXAM ENROLLMENT / REGISTRATION</b>`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `👤 <b>Student:</b> ${this.escapeHtml(student.name)} (<code>${this.escapeHtml(student.email)}</code>)`,
+      `📝 <b>Exam:</b> ${this.escapeHtml(exam.title)}`,
+      `🎯 <b>Total Marks:</b> ${exam.total_marks} Marks (${exam.duration} Mins)`,
+      locationLine,
+      `🌐 <b>IP Address:</b> <code>${this.escapeHtml(ip || 'Unknown')}</code>`,
+      `⏰ <b>Timestamp:</b> ${now} (IST)`
+    ].filter(Boolean).join('\n');
+
+    await this.sendMessage(msg);
+  }
+
+  /**
+   * 4. Notify on Exam or Module Start
+   */
+  async notifyExamStart({ student, exam, targetModule, attemptNumber, duration, location }) {
     if (!this.isConfigured) return;
 
     const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
     const moduleInfo = targetModule ? `📚 <b>Module:</b> ${this.escapeHtml(targetModule.title)} (Module #${targetModule.order_num || 1})` : `📚 <b>Scope:</b> Comprehensive Assessment (All Modules)`;
+    const locationLine = this.formatLocation(location);
 
     const msg = [
       `🚀 <b>EXAMINATION SESSION STARTED</b>`,
@@ -127,14 +197,15 @@ class TelegramBotService {
       `🔢 <b>Attempt:</b> Attempt #${attemptNumber || 1}`,
       `⏳ <b>Total Allowed Duration:</b> ${duration || exam.duration} Minutes`,
       `🎯 <b>Total Exam Marks:</b> ${exam.total_marks} Marks`,
+      locationLine,
       `⏰ <b>Start Time:</b> ${now} (IST)`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     await this.sendMessage(msg);
   }
 
   /**
-   * 3. Notify on Question Answer Click / Selection / Input with Time Taken
+   * 5. Notify on Question Answer Click / Selection / Input with Time Taken
    */
   async notifyQuestionInteraction({
     student,
@@ -148,13 +219,15 @@ class TelegramBotService {
     previousAnswer,
     timeSpentSeconds,
     totalElapsedSeconds,
-    wordCount
+    wordCount,
+    location
   }) {
     if (!this.isConfigured) return;
 
     const now = new Date().toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata' });
     const timeSpentFormatted = this.formatDuration(timeSpentSeconds);
     const totalElapsedFormatted = this.formatDuration(totalElapsedSeconds);
+    const locationLine = this.formatLocation(location);
 
     let answerPreview = '';
     if (questionType === 'mcq') {
@@ -182,20 +255,22 @@ class TelegramBotService {
       answerPreview,
       `⏱️ <b>Time Spent on Q${questionNumber || ''}:</b> <b>${timeSpentFormatted}</b>`,
       `⌛ <b>Total Exam Elapsed:</b> ${totalElapsedFormatted}`,
+      locationLine,
       `⏰ <b>Timestamp:</b> ${now} (IST)`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     await this.sendMessage(msg);
   }
 
   /**
-   * 4. Notify on Proctoring / Security Violations (Tab Switches, Fullscreen Exits)
+   * 6. Notify on Proctoring / Security Violations (Tab Switches, Fullscreen Exits)
    */
-  async notifySecurityViolation({ student, exam, violationType, count, action }) {
+  async notifySecurityViolation({ student, exam, violationType, count, action, location }) {
     if (!this.isConfigured) return;
 
     const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
     const isCancelled = action === 'cancelled' || count >= 2;
+    const locationLine = this.formatLocation(location);
 
     const msg = [
       isCancelled ? `🚨 <b>EXAM TERMINATED: PROCTORING VIOLATION</b>` : `⚠️ <b>PROCTORING WARNING ISSUED</b>`,
@@ -205,14 +280,15 @@ class TelegramBotService {
       `⚠️ <b>Violation Type:</b> ${violationType === 'tab_switch' ? 'Browser Tab Switch / Window Blur' : this.escapeHtml(violationType)}`,
       `🔢 <b>Violation Count:</b> <b>${count} of 2 permitted</b>`,
       `⚖️ <b>System Action:</b> ${isCancelled ? '🔴 <b>SESSION CANCELLED & LOCKED</b>' : '🟡 <b>First & Final Warning Displayed</b>'}`,
+      locationLine,
       `⏰ <b>Time:</b> ${now} (IST)`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     await this.sendMessage(msg);
   }
 
   /**
-   * 5. Notify on Exam / Module Submission & Final Results
+   * 7. Notify on Exam / Module Submission & Final Results
    */
   async notifyExamSubmission({
     student,
@@ -225,13 +301,15 @@ class TelegramBotService {
     attemptedCount,
     totalQuestions,
     totalTimeSpentSeconds,
-    status
+    status,
+    location
   }) {
     if (!this.isConfigured) return;
 
     const now = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'medium' });
     const totalTimeFormatted = this.formatDuration(totalTimeSpentSeconds);
     const passed = percentage >= ((exam.passing_marks / (exam.total_marks || 100)) * 100);
+    const locationLine = this.formatLocation(location);
 
     const msg = [
       `✅ <b>EXAMINATION SUBMISSION RECORDED</b>`,
@@ -244,14 +322,15 @@ class TelegramBotService {
       `🎯 <b>Initial Score:</b> <b>${score} / ${totalMarks}</b> (<b>${percentage}%</b>)`,
       `🏆 <b>Result Status:</b> ${status === 'graded' ? (passed ? '🟢 <b>PASSED</b>' : '🔴 <b>FAILED</b>') : '🟡 <b>Under Evaluator Review (Theory/Coding)</b>'}`,
       `⏳ <b>Total Time Taken:</b> <b>${totalTimeFormatted}</b>`,
+      locationLine,
       `⏰ <b>Submitted At:</b> ${now} (IST)`
-    ].join('\n');
+    ].filter(Boolean).join('\n');
 
     await this.sendMessage(msg);
   }
 
   /**
-   * 6. Interactive Two-Way Telegram Bot (Long Polling for /status, /active, /recent)
+   * 8. Interactive Two-Way Telegram Bot (Long Polling for /status, /active, /recent)
    */
   startPolling() {
     if (!this.token) {

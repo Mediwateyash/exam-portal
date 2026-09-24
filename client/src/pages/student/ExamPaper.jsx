@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { getClientLocation } from '../../utils/geo';
 import QuestionPalette from '../../components/QuestionPalette';
 import ConfirmationModal from '../../components/ConfirmationModal';
 import CodeEditor from '../../components/CodeEditor';
@@ -96,6 +97,7 @@ export default function ExamPaper() {
   const noticeTimerRef = useRef(null);
   const questionStartTimeRef = useRef(Date.now());
   const theoryDebounceRef = useRef(null);
+  const clientLocationRef = useRef(null);
 
   useEffect(() => {
     answersRef.current = answers;
@@ -117,7 +119,10 @@ export default function ExamPaper() {
   useEffect(() => {
     async function initExam() {
       try {
-        const res = await api.startExam(id, false, moduleId);
+        const loc = await getClientLocation().catch(() => null);
+        clientLocationRef.current = loc;
+
+        const res = await api.startExam(id, false, moduleId, loc);
         setExam(res.exam);
         setActiveModule(res.activeModule || null);
         setSubmissionId(res.submissionId);
@@ -159,7 +164,7 @@ export default function ExamPaper() {
     isProcessingViolationRef.current = true;
 
     try {
-      const res = await api.recordSecurityViolation(id, 'tab_switch');
+      const res = await api.recordSecurityViolation(id, 'tab_switch', clientLocationRef.current);
       const count = res.tabSwitchCount || 0;
       setTabSwitchCount(count);
 
@@ -329,7 +334,8 @@ export default function ExamPaper() {
         selectedAnswer: val,
         previousAnswer: prevAnswer,
         timeSpentSeconds: timeSpent,
-        totalElapsedSeconds: totalElapsed
+        totalElapsedSeconds: totalElapsed,
+        location: clientLocationRef.current
       }).catch(() => {});
     } else {
       // Debounce theory & code typing updates so it doesn't flood on every character
@@ -348,7 +354,8 @@ export default function ExamPaper() {
           previousAnswer: prevAnswer,
           timeSpentSeconds: timeSpent,
           totalElapsedSeconds: totalElapsed,
-          wordCount
+          wordCount,
+          location: clientLocationRef.current
         }).catch(() => {});
       }, 1500);
     }
@@ -399,7 +406,7 @@ export default function ExamPaper() {
         language: answers[qId]?.language || 'javascript'
       }));
 
-      const res = await api.submitExam(id, formattedAnswers, 0, moduleId);
+      const res = await api.submitExam(id, formattedAnswers, 0, moduleId, false, clientLocationRef.current);
       setShowSubmitModal(false);
       if (document.fullscreenElement && document.exitFullscreen) {
         try { await document.exitFullscreen(); } catch (e) {}

@@ -13,7 +13,7 @@ const telegramBot = require('../services/telegramBot');
 // Register a new student
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, confirmPassword } = req.body;
+    const { name, email, password, confirmPassword, location } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'Full name, email, and password are required.' });
@@ -39,7 +39,8 @@ router.post('/register', async (req, res) => {
       name: name.trim(),
       email: normalizedEmail,
       password: passwordHash,
-      role: 'student'
+      role: 'student',
+      last_location: location || null
     });
 
     const userPayload = {
@@ -51,10 +52,11 @@ router.post('/register', async (req, res) => {
 
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
-    // Send Telegram Notification
-    telegramBot.notifyLogin({
+    // Send Telegram Registration Alert with Location
+    telegramBot.notifyRegistration({
       user: userPayload,
       ip: req.ip || req.headers['x-forwarded-for'],
+      location: location || null,
       userAgent: req.headers['user-agent']
     }).catch(() => {});
 
@@ -72,7 +74,7 @@ router.post('/register', async (req, res) => {
 // Login for Admin or Student
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, location } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required.' });
@@ -90,6 +92,11 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
 
+    if (location) {
+      userRecord.last_location = location;
+      await userRecord.save().catch(() => {});
+    }
+
     const userPayload = {
       id: userRecord._id.toString(),
       name: userRecord.name,
@@ -99,10 +106,11 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
-    // Send Telegram Notification
+    // Send Telegram Notification with Location
     telegramBot.notifyLogin({
       user: userPayload,
       ip: req.ip || req.headers['x-forwarded-for'],
+      location: location || userRecord.last_location || null,
       userAgent: req.headers['user-agent']
     }).catch(() => {});
 

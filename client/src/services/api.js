@@ -37,8 +37,8 @@ async function request(endpoint, options = {}) {
 
 export const api = {
   // Auth
-  login: (email, password) => request('/auth/login', { method: 'POST', body: { email, password } }),
-  register: (name, email, password, confirmPassword) => request('/auth/register', { method: 'POST', body: { name, email, password, confirmPassword } }),
+  login: (email, password, location = null) => request('/auth/login', { method: 'POST', body: { email, password, location } }),
+  register: (name, email, password, confirmPassword, location = null) => request('/auth/register', { method: 'POST', body: { name, email, password, confirmPassword, location } }),
   getCurrentUser: () => request('/auth/me'),
   getAdminStats: () => request('/auth/admin/stats'),
 
@@ -64,17 +64,17 @@ export const api = {
   // Student Flow
   getAvailableExams: () => request('/student/exams'),
   getMyExams: () => request('/student/my-exams'),
-  registerExam: (examId) => request(`/student/exams/${examId}/register`, { method: 'POST' }),
+  registerExam: (examId, location = null) => request(`/student/exams/${examId}/register`, { method: 'POST', body: { location } }),
   getExamModulesOverview: (examId) => request(`/student/exams/${examId}/modules-overview`),
   getExamInstructions: (examId, moduleId = null) =>
     request(`/student/exams/${examId}/instructions${moduleId ? `?moduleId=${moduleId}` : ''}`),
-  startExam: (examId, reattempt = false, moduleId = null) =>
-    request(`/student/exams/${examId}/start${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { reattempt, moduleId } }),
+  startExam: (examId, reattempt = false, moduleId = null, location = null) =>
+    request(`/student/exams/${examId}/start${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { reattempt, moduleId, location } }),
   reattemptExam: (examId) => request(`/student/exams/${examId}/reattempt`, { method: 'POST' }),
-  submitExam: (examId, answers, timeSpentSeconds, moduleId = null, isModuleOnly = false) =>
-    request(`/student/exams/${examId}/submit${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { answers, timeSpentSeconds, moduleId, isModuleOnly } }),
-  recordSecurityViolation: (examId, violationType = 'tab_switch') =>
-    request(`/student/exams/${examId}/security-violation`, { method: 'POST', body: { violationType } }),
+  submitExam: (examId, answers, timeSpentSeconds, moduleId = null, isModuleOnly = false, location = null) =>
+    request(`/student/exams/${examId}/submit${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { answers, timeSpentSeconds, moduleId, isModuleOnly, location } }),
+  recordSecurityViolation: (examId, violationType = 'tab_switch', location = null) =>
+    request(`/student/exams/${examId}/security-violation`, { method: 'POST', body: { violationType, location } }),
   saveAnswers: (examId, answers) =>
     request(`/student/exams/${examId}/save-answers`, { method: 'POST', body: { answers } }),
 

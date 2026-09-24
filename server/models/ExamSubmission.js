@@ -54,6 +54,13 @@ const ExamSubmissionSchema = new mongoose.Schema({
   attempt_number: {
     type: Number,
     default: 1
+  },
+  location: {
+    latitude: Number,
+    longitude: Number,
+    accuracy: Number,
+    maps_url: String,
+    address: String
   }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }

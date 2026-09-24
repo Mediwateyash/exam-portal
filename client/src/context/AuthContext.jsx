@@ -24,16 +24,16 @@ export const AuthProvider = ({ children }) => {
     loadUser();
   }, [token]);
 
-  const login = async (email, password) => {
-    const res = await api.login(email, password);
+  const login = async (email, password, location = null) => {
+    const res = await api.login(email, password, location);
     localStorage.setItem('examdesk_token', res.token);
     setToken(res.token);
     setUser(res.user);
     return res.user;
   };
 
-  const register = async (name, email, password, confirmPassword) => {
-    const res = await api.register(name, email, password, confirmPassword);
+  const register = async (name, email, password, confirmPassword, location = null) => {
+    const res = await api.register(name, email, password, confirmPassword, location);
     localStorage.setItem('examdesk_token', res.token);
     setToken(res.token);
     setUser(res.user);

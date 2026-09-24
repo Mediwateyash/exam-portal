@@ -72,11 +72,23 @@ router.post('/exams/:id/register', requireStudent, async (req, res) => {
       return res.status(400).json({ error: 'You are already registered for this examination.' });
     }
 
+    const location = req.body?.location || null;
+
     const registration = await ExamRegistration.create({
       exam_id: exam._id,
       student_id: studentId,
       status: 'registered'
     });
+
+    // Send Telegram Exam Registration Alert
+    User.findById(studentId).lean().then(studentUser => {
+      telegramBot.notifyExamRegistration({
+        student: studentUser || { name: 'Student', email: req.user.email },
+        exam,
+        ip: req.ip || req.headers['x-forwarded-for'],
+        location
+      }).catch(() => {});
+    }).catch(() => {});
 
     return res.status(201).json({
       message: 'Successfully registered for examination!',
@@ -486,14 +498,21 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
       };
     });
 
-    // Send Telegram Notification
+    const location = req.body?.location || null;
+    if (location && submission) {
+      submission.location = location;
+      await submission.save().catch(() => {});
+    }
+
+    // Send Telegram Notification with Location
     User.findById(studentId).lean().then(studentUser => {
       telegramBot.notifyExamStart({
         student: studentUser || { name: 'Student', email: req.user.email },
         exam,
         targetModule: activeModule,
         attemptNumber: submission.attempt_number || 1,
-        duration: exam.duration
+        duration: exam.duration,
+        location: location || submission.location || null
       }).catch(() => {});
     }).catch(() => {});
 
@@ -535,7 +554,7 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
   try {
     const examId = req.params.id;
     const studentId = req.user.id;
-    const { violationType } = req.body;
+    const { violationType, location } = req.body;
 
     const exam = await Exam.findById(examId);
     if (!exam) {
@@ -565,6 +584,11 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
     }
 
     submission.tab_switch_count = (submission.tab_switch_count || 0) + 1;
+    if (location) {
+      submission.location = location;
+    }
+
+    const currentLoc = location || submission.location || null;
 
     if (submission.tab_switch_count >= 2) {
       submission.is_cancelled = true;
@@ -585,7 +609,8 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
           exam,
           violationType: violationType || 'tab_switch',
           count: submission.tab_switch_count,
-          action: 'cancelled'
+          action: 'cancelled',
+          location: currentLoc
         }).catch(() => {});
       }).catch(() => {});
 
@@ -607,7 +632,8 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
         exam,
         violationType: violationType || 'tab_switch',
         count: submission.tab_switch_count,
-        action: 'warning'
+        action: 'warning',
+        location: currentLoc
       }).catch(() => {});
     }).catch(() => {});
 
@@ -798,19 +824,26 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
     const totalMarks = totalExamMarks || exam.total_marks || 100;
     const percentage = totalMarks > 0 ? parseFloat(((autoScore / totalMarks) * 100).toFixed(2)) : 0;
 
+    const location = req.body?.location || submission.location || null;
+
     submission.submitted_at = new Date();
     submission.score = autoScore;
     submission.total_marks = totalMarks;
     submission.percentage = percentage;
     submission.status = finalStatus;
+    if (location) {
+      submission.location = location;
+    }
     await submission.save();
 
     await ExamRegistration.updateOne({ exam_id: exam._id, student_id: studentId }, { status: 'completed' });
 
-    const studentRecord = await User.findById(studentId);
-    const elapsedSeconds = submission.started_at ? Math.floor((new Date().getTime() - new Date(submission.started_at).getTime()) / 1000) : 0;
+    const studentRecord = await User.findById(studentId).lean();
+    const elapsedSeconds = submission.started_at
+      ? Math.max(0, Math.floor((new Date().getTime() - new Date(submission.started_at).getTime()) / 1000))
+      : (req.body?.timeSpentSeconds || 0);
 
-    // Send Telegram Exam Submission Alert
+    // Send Telegram Exam Submission Alert with Location
     telegramBot.notifyExamSubmission({
       student: studentRecord || { name: 'Student', email: req.user.email },
       exam,
@@ -822,7 +855,8 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
       attemptedCount: attemptedCount,
       totalQuestions: examQuestions.length,
       totalTimeSpentSeconds: elapsedSeconds,
-      status: finalStatus
+      status: finalStatus,
+      location: location || studentRecord?.last_location || null
     }).catch(() => {});
 
     return res.json({

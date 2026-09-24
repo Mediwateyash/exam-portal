@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
+import { getClientLocation } from '../../utils/geo';
 import { 
   ArrowLeft, 
   Clock, 
@@ -69,6 +70,9 @@ export default function ExamInstructions() {
     setError('');
 
     try {
+      // Warm-up GPS location permissions
+      await getClientLocation().catch(() => {});
+
       if (isPreviousCompleted) {
         await api.reattemptExam(id);
       }
