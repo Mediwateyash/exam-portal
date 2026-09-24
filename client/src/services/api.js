@@ -65,10 +65,14 @@ export const api = {
   getAvailableExams: () => request('/student/exams'),
   getMyExams: () => request('/student/my-exams'),
   registerExam: (examId) => request(`/student/exams/${examId}/register`, { method: 'POST' }),
-  getExamInstructions: (examId) => request(`/student/exams/${examId}/instructions`),
-  startExam: (examId) => request(`/student/exams/${examId}/start`, { method: 'POST' }),
-  submitExam: (examId, answers, timeSpentSeconds) =>
-    request(`/student/exams/${examId}/submit`, { method: 'POST', body: { answers, timeSpentSeconds } }),
+  getExamModulesOverview: (examId) => request(`/student/exams/${examId}/modules-overview`),
+  getExamInstructions: (examId, moduleId = null) =>
+    request(`/student/exams/${examId}/instructions${moduleId ? `?moduleId=${moduleId}` : ''}`),
+  startExam: (examId, reattempt = false, moduleId = null) =>
+    request(`/student/exams/${examId}/start${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { reattempt, moduleId } }),
+  reattemptExam: (examId) => request(`/student/exams/${examId}/reattempt`, { method: 'POST' }),
+  submitExam: (examId, answers, timeSpentSeconds, moduleId = null, isModuleOnly = false) =>
+    request(`/student/exams/${examId}/submit${moduleId ? `?moduleId=${moduleId}` : ''}`, { method: 'POST', body: { answers, timeSpentSeconds, moduleId, isModuleOnly } }),
   recordSecurityViolation: (examId, violationType = 'tab_switch') =>
     request(`/student/exams/${examId}/security-violation`, { method: 'POST', body: { violationType } }),
   saveAnswers: (examId, answers) =>

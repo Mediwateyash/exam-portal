@@ -1,7 +1,18 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useParams, Link, useNavigate } from 'react-router-dom';
 import confetti from 'canvas-confetti';
-import { CheckCircle, Award, Clock, HelpCircle, FileText, ArrowRight, User } from 'lucide-react';
+import { 
+  CheckCircle, 
+  Award, 
+  Clock, 
+  HelpCircle, 
+  FileText, 
+  ArrowRight, 
+  RotateCcw, 
+  AlertCircle,
+  Layers
+} from 'lucide-react';
+import { api } from '../../services/api';
 
 export default function ExamSubmitted() {
   const location = useLocation();
@@ -10,6 +21,13 @@ export default function ExamSubmitted() {
 
   const submission = location.state?.submission || null;
   const isAuto = location.state?.isAuto || false;
+  const activeModule = location.state?.activeModule || null;
+  const moduleId = location.state?.moduleId || null;
+
+  const [isReattempting, setIsReattempting] = useState(false);
+  const [reattemptError, setReattemptError] = useState('');
+
+  const examId = submission?.examId || location.state?.examId || id;
 
   useEffect(() => {
     // Trigger celebratory confetti effect on successful submission
@@ -23,6 +41,22 @@ export default function ExamSubmitted() {
       // Ignore if confetti unavailable
     }
   }, []);
+
+  const handleReattempt = async () => {
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be initialized with full time duration.')) {
+      return;
+    }
+
+    setIsReattempting(true);
+    setReattemptError('');
+    try {
+      await api.reattemptExam(examId);
+      navigate(`/exam/${examId}/modules`);
+    } catch (err) {
+      setReattemptError(err.message || 'Failed to initialize reattempt.');
+      setIsReattempting(false);
+    }
+  };
 
   return (
     <div className="main-content" style={{ maxWidth: '680px', marginTop: '2rem' }}>
@@ -43,14 +77,34 @@ export default function ExamSubmitted() {
           <CheckCircle size={42} />
         </div>
 
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+          <span className="badge badge-purple" style={{ fontSize: '0.8125rem', padding: '0.3rem 0.75rem' }}>
+            Attempt #{submission?.attemptNumber || 1}
+          </span>
+          {activeModule && (
+            <span className="badge badge-primary" style={{ fontSize: '0.8125rem', padding: '0.3rem 0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              <Layers size={13} /> Module: {activeModule.title}
+            </span>
+          )}
+        </div>
+
         <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#0f172a', marginBottom: '0.5rem' }}>
-          Exam Submitted Successfully!
+          {activeModule ? 'Module Exam Submitted Successfully!' : 'Exam Submitted Successfully!'}
         </h1>
         <p style={{ color: '#64748b', fontSize: '1rem', maxWidth: '480px', margin: '0 auto 2rem', lineHeight: '1.6' }}>
           {isAuto
             ? 'The examination timer reached 00:00:00 and your answers were automatically securely saved and submitted.'
-            : 'Your answers have been securely recorded. All MCQ sections are automatically scored, and theoretical questions will be reviewed by the evaluator.'}
+            : activeModule
+              ? `Your answers for ${activeModule.title} have been securely recorded. You can return to the Exam Modules Hub to continue with other modules or review your progress.`
+              : 'Your answers have been securely recorded. All MCQ sections are automatically scored, and theoretical questions will be reviewed by the evaluator.'}
         </p>
+
+        {reattemptError && (
+          <div className="alert alert-danger" style={{ marginBottom: '1.5rem', textAlign: 'left' }}>
+            <AlertCircle size={18} />
+            <span>{reattemptError}</span>
+          </div>
+        )}
 
         {/* Submission Details Receipt Card */}
         <div style={{
@@ -61,8 +115,9 @@ export default function ExamSubmitted() {
           textAlign: 'left',
           marginBottom: '2rem'
         }}>
-          <div style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>
-            Official Submission Receipt
+          <div style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: '1rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Official Submission Receipt</span>
+            <span style={{ color: '#7c3aed', fontWeight: '800' }}>Attempt #{submission?.attemptNumber || 1}</span>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.875rem' }}>
@@ -75,6 +130,13 @@ export default function ExamSubmitted() {
               <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Examination</div>
               <div style={{ fontWeight: '700', color: '#0f172a' }}>{submission?.examTitle || 'Exam'}</div>
             </div>
+
+            {activeModule && (
+              <div>
+                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Module Taken</div>
+                <div style={{ fontWeight: '700', color: '#2563eb' }}>{activeModule.title}</div>
+              </div>
+            )}
 
             <div>
               <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Submission Time</div>
@@ -91,11 +153,6 @@ export default function ExamSubmitted() {
             </div>
 
             <div>
-              <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Total Questions</div>
-              <div style={{ fontWeight: '700', color: '#0f172a' }}>{submission?.totalQuestions || 'All'}</div>
-            </div>
-
-            <div>
               <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Attempted Questions</div>
               <div style={{ fontWeight: '700', color: '#2563eb' }}>{submission?.attemptedQuestions || 0}</div>
             </div>
@@ -104,29 +161,55 @@ export default function ExamSubmitted() {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <Link to="/student/results" className="btn btn-secondary btn-lg">
-            My Results History
+          <Link
+            to={`/exam/${examId}/modules`}
+            className="btn btn-primary btn-lg"
+            style={{
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+              boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontWeight: '700'
+            }}
+          >
+            <Layers size={18} />
+            Return to Exam Modules Hub
           </Link>
 
-          {submission?.id ? (
+          {submission?.id && (
             <Link
               to={`/student/results/${submission.id}`}
-              className="btn btn-primary btn-lg"
-              style={{
-                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
-              }}
+              className="btn btn-secondary btn-lg"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
             >
-              View Submitted Answers
-              <ArrowRight size={18} />
-            </Link>
-          ) : (
-            <Link to="/student/dashboard" className="btn btn-primary btn-lg">
-              Return to Home
+              View Submitted Result
+              <ArrowRight size={17} />
             </Link>
           )}
+
+          <button
+            type="button"
+            onClick={handleReattempt}
+            disabled={isReattempting}
+            className="btn btn-outline-warning btn-lg"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              fontWeight: '700'
+            }}
+          >
+            <RotateCcw size={17} />
+            {isReattempting ? 'Preparing...' : 'Reattempt Entire Exam'}
+          </button>
+
+          <Link to="/student/results" className="btn btn-outline-secondary btn-lg">
+            My Results History
+          </Link>
         </div>
       </div>
     </div>
   );
 }
+

@@ -12,7 +12,8 @@ import {
   ArrowRight, 
   Sparkles,
   AlertCircle,
-  FileCheck
+  FileCheck,
+  RotateCcw
 } from 'lucide-react';
 
 export default function StudentDashboard() {
@@ -22,6 +23,7 @@ export default function StudentDashboard() {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [registeringId, setRegisteringId] = useState(null);
+  const [reattemptingId, setReattemptingId] = useState(null);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
@@ -54,6 +56,22 @@ export default function StudentDashboard() {
       setError(err.message || 'Failed to register for exam.');
     } finally {
       setRegisteringId(null);
+    }
+  };
+
+  const handleReattempt = async (examId) => {
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be initialized with full time duration.')) {
+      return;
+    }
+
+    setReattemptingId(examId);
+    setError('');
+    try {
+      await api.reattemptExam(examId);
+      navigate(`/exam/${examId}/instructions`);
+    } catch (err) {
+      setError(err.message || 'Failed to initialize reattempt.');
+      setReattemptingId(null);
     }
   };
 
@@ -101,7 +119,7 @@ export default function StudentDashboard() {
             Welcome back, {user?.name || 'Student'}
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '0.9375rem', lineHeight: '1.6' }}>
-            Browse active examinations, register for your enrolled modules, and sit for tests with our high-fidelity digital examination paper.
+            Browse active examinations, register for your enrolled modules, sit for tests with our digital examination paper, or reattempt assessments.
           </p>
         </div>
 
@@ -135,7 +153,7 @@ export default function StudentDashboard() {
               Available Examinations
             </h2>
             <p style={{ fontSize: '0.875rem', color: '#64748b' }}>
-              Register for an exam to unlock the official digital examination paper.
+              Register for an exam to unlock the official digital examination paper, or reattempt completed tests.
             </p>
           </div>
         </div>
@@ -163,12 +181,19 @@ export default function StudentDashboard() {
                   <div>
                     {/* Top Row: Status Badges */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
-                      <span className={`badge ${
-                        isSubmitted ? 'badge-success' :
-                        isRegistered ? 'badge-primary' : 'badge-secondary'
-                      }`}>
-                        {isSubmitted ? 'Completed' : isRegistered ? 'Registered' : 'Available'}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span className={`badge ${
+                          isSubmitted ? 'badge-success' :
+                          isRegistered ? 'badge-primary' : 'badge-secondary'
+                        }`}>
+                          {isSubmitted ? 'Completed' : isRegistered ? 'Registered' : 'Available'}
+                        </span>
+                        {isSubmitted && exam.attempt_number && (
+                          <span className="badge badge-purple">
+                            Attempt #{exam.attempt_number}
+                          </span>
+                        )}
+                      </div>
 
                       <span style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: '600' }}>
                         Date: {exam.exam_date || 'Flexible'}
@@ -226,15 +251,42 @@ export default function StudentDashboard() {
                   </div>
 
                   {/* Actions */}
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                     {isSubmitted ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                        <div style={{ fontSize: '0.875rem', fontWeight: '700', color: '#059669', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                          <CheckCircle size={16} /> Submitted
-                        </div>
-                        <Link to={`/student/results/${exam.submission_id}`} className="btn btn-outline-primary btn-sm">
-                          View Answers / Results
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <Link
+                          to={`/exam/${exam.id}/modules`}
+                          className="btn btn-outline-primary btn-sm"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            fontWeight: '700'
+                          }}
+                        >
+                          <Layers size={14} />
+                          Modules Desk
                         </Link>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleReattempt(exam.id)}
+                            disabled={reattemptingId === exam.id}
+                            className="btn btn-outline-warning btn-sm"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              fontWeight: '700'
+                            }}
+                          >
+                            <RotateCcw size={14} />
+                            {reattemptingId === exam.id ? 'Starting...' : 'Reattempt'}
+                          </button>
+                          <Link to={`/student/results/${exam.submission_id}`} className="btn btn-primary btn-sm">
+                            View Results
+                          </Link>
+                        </div>
                       </div>
                     ) : isRegistered ? (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -242,14 +294,19 @@ export default function StudentDashboard() {
                           ✓ Registered
                         </span>
                         <Link
-                          to={`/exam/${exam.id}/instructions`}
+                          to={`/exam/${exam.id}/modules`}
                           className="btn btn-primary"
                           style={{
                             background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
+                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            fontWeight: '700'
                           }}
                         >
-                          Start Exam
+                          <Layers size={16} />
+                          View Modules &amp; Take Exam
                           <ArrowRight size={16} />
                         </Link>
                       </div>
@@ -276,3 +333,4 @@ export default function StudentDashboard() {
     </div>
   );
 }
+

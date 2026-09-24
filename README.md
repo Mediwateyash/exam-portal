@@ -193,6 +193,7 @@ The platform automatically seeds demo accounts on first run:
 | `POST` | `/api/student/exams/:id/register` | Enroll student in an examination |
 | `GET` | `/api/student/exams/:id/instructions` | Retrieve exam metadata, stats, and rules |
 | `POST` | `/api/student/exams/:id/start` | Initialize examination session & countdown timer |
+| `POST` | `/api/student/exams/:id/reattempt` | Initialize a fresh reattempt session (Attempt #2+) |
 | `POST` | `/api/student/exams/:id/security-violation` | Record tab switch event (1st: warn, 2nd: cancel) |
 | `POST` | `/api/student/exams/:id/save-answers` | Persist student answers safely on cancellation |
 | `POST` | `/api/student/exams/:id/submit` | Final submission with instant MCQ auto-evaluation |
@@ -203,8 +204,8 @@ The platform automatically seeds demo accounts on first run:
 | `GET` | `/api/submissions` | Retrieve all candidate exam submissions (Admin) |
 | `GET` | `/api/submissions/:id` | View detailed answer sheet with theory & code answers (Admin) |
 | `POST` | `/api/submissions/:id/evaluate` | Publish manual grades and remarks for candidate (Admin) |
-| `GET` | `/api/results` | View list of completed examination results (Student) |
-| `GET` | `/api/results/:submissionId` | View detailed scorecard and teacher remarks (Student) |
+| `GET` | `/api/results` | View list of completed examination results with attempt badges (Student) |
+| `GET` | `/api/results/:submissionId` | View detailed scorecard, attempt switcher, and teacher remarks (Student) |
 
 ---
 
@@ -215,6 +216,9 @@ ExamDesk includes automated test suites to ensure zero regressions across securi
 ```bash
 # Run 10-step full-stack verification flow:
 node server/test_flow.js
+
+# Run reattempt and multi-attempt verification suite:
+node server/test_reattempt_flow.js
 
 # Run strict security & anti-cheating verification suite:
 node server/test_security_verification.js

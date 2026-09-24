@@ -50,12 +50,16 @@ const ExamSubmissionSchema = new mongoose.Schema({
   cancel_reason: {
     type: String,
     default: null
+  },
+  attempt_number: {
+    type: Number,
+    default: 1
   }
 }, {
   timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' }
 });
 
-ExamSubmissionSchema.index({ exam_id: 1, student_id: 1 }, { unique: true });
+ExamSubmissionSchema.index({ exam_id: 1, student_id: 1, attempt_number: 1 }, { unique: true });
 
 ExamSubmissionSchema.set('toJSON', {
   virtuals: true,
@@ -68,4 +72,10 @@ ExamSubmissionSchema.set('toJSON', {
   }
 });
 
-module.exports = mongoose.model('ExamSubmission', ExamSubmissionSchema);
+const ExamSubmission = mongoose.model('ExamSubmission', ExamSubmissionSchema);
+
+// Safely drop obsolete index from single-attempt schema if it exists
+ExamSubmission.collection.dropIndex('exam_id_1_student_id_1').catch(() => {});
+
+module.exports = ExamSubmission;
+

@@ -23,7 +23,10 @@ router.get('/exams', requireAuth, async (req, res) => {
       const questionCount = await Question.countDocuments({ module_id: { $in: moduleIds } });
 
       const reg = await ExamRegistration.findOne({ exam_id: examId, student_id: studentId });
-      const sub = await ExamSubmission.findOne({ exam_id: examId, student_id: studentId, submitted_at: { $ne: null } });
+      const sub = await ExamSubmission.findOne({ exam_id: examId, student_id: studentId }).sort({ attempt_number: -1, createdAt: -1 });
+      const totalAttempts = await ExamSubmission.countDocuments({ exam_id: examId, student_id: studentId, submitted_at: { $ne: null } });
+
+      const isCompleted = sub && (sub.submitted_at || sub.is_cancelled || sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'cancelled');
 
       return {
         ...e,
@@ -34,7 +37,10 @@ router.get('/exams', requireAuth, async (req, res) => {
         registration_id: reg ? reg._id.toString() : null,
         submission_status: sub ? sub.status : null,
         submission_id: sub ? sub._id.toString() : null,
-        student_score: sub ? sub.score : null
+        student_score: sub ? sub.score : null,
+        attempt_number: sub ? (sub.attempt_number || 1) : 1,
+        total_attempts: totalAttempts,
+        can_reattempt: Boolean(reg && isCompleted)
       };
     }));
 
@@ -98,7 +104,10 @@ router.get('/my-exams', requireStudent, async (req, res) => {
       const modules = await Module.find({ exam_id: examId }).select('_id');
       const moduleIds = modules.map(m => m._id);
       const questionCount = await Question.countDocuments({ module_id: { $in: moduleIds } });
-      const sub = await ExamSubmission.findOne({ exam_id: examId, student_id: studentId, submitted_at: { $ne: null } });
+      const sub = await ExamSubmission.findOne({ exam_id: examId, student_id: studentId }).sort({ attempt_number: -1, createdAt: -1 });
+      const totalAttempts = await ExamSubmission.countDocuments({ exam_id: examId, student_id: studentId, submitted_at: { $ne: null } });
+
+      const isCompleted = sub && (sub.submitted_at || sub.is_cancelled || sub.status === 'submitted' || sub.status === 'graded' || sub.status === 'cancelled');
 
       return {
         ...exam,
@@ -110,6 +119,9 @@ router.get('/my-exams', requireStudent, async (req, res) => {
         submitted_at: sub ? sub.submitted_at : null,
         student_score: sub ? sub.score : null,
         submission_status: sub ? sub.status : null,
+        attempt_number: sub ? (sub.attempt_number || 1) : 1,
+        total_attempts: totalAttempts,
+        can_reattempt: Boolean(isCompleted),
         module_count: modules.length,
         question_count: questionCount
       };
@@ -127,6 +139,7 @@ router.get('/exams/:id/instructions', requireStudent, async (req, res) => {
   try {
     const examId = req.params.id;
     const studentId = req.user.id;
+    const moduleId = req.query.moduleId;
 
     const exam = await Exam.findById(examId).lean();
     if (!exam) {
@@ -138,10 +151,27 @@ router.get('/exams/:id/instructions', requireStudent, async (req, res) => {
       return res.status(403).json({ error: 'You must register for this exam before accessing instructions.' });
     }
 
-    const submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).lean();
+    const latestSubmission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1, createdAt: -1 }).lean();
+    const totalAttempts = await ExamSubmission.countDocuments({ exam_id: exam._id, student_id: studentId, submitted_at: { $ne: null } });
+    const allAttempts = await ExamSubmission.find({ exam_id: exam._id, student_id: studentId })
+      .sort({ attempt_number: -1 })
+      .select('_id attempt_number status score total_marks percentage submitted_at is_cancelled')
+      .lean();
 
-    const modules = await Module.find({ exam_id: exam._id }).select('_id');
-    const moduleIds = modules.map(m => m._id);
+    let moduleIds;
+    let targetModule = null;
+
+    if (moduleId) {
+      targetModule = await Module.findOne({ _id: moduleId, exam_id: exam._id }).lean();
+      if (targetModule) {
+        moduleIds = [targetModule._id];
+      }
+    }
+
+    if (!moduleIds) {
+      const modules = await Module.find({ exam_id: exam._id }).select('_id');
+      moduleIds = modules.map(m => m._id);
+    }
 
     const theoryCount = await Question.countDocuments({ module_id: { $in: moduleIds }, type: 'theory' });
     const mcqCount = await Question.countDocuments({ module_id: { $in: moduleIds }, type: 'mcq' });
@@ -153,8 +183,11 @@ router.get('/exams/:id/instructions', requireStudent, async (req, res) => {
         ...exam,
         id: exam._id.toString()
       },
+      targetModule: targetModule ? { ...targetModule, id: targetModule._id.toString() } : null,
       registration: registration.toJSON(),
-      submission: submission ? { ...submission, id: submission._id.toString() } : null,
+      submission: latestSubmission ? { ...latestSubmission, id: latestSubmission._id.toString() } : null,
+      total_attempts: totalAttempts,
+      all_attempts: allAttempts.map(a => ({ ...a, id: a._id.toString() })),
       stats: {
         theory_count: theoryCount,
         mcq_count: mcqCount,
@@ -168,8 +201,109 @@ router.get('/exams/:id/instructions', requireStudent, async (req, res) => {
   }
 });
 
-// 5. Start Exam (Loads Question Paper with Timer)
-router.post('/exams/:id/start', requireStudent, async (req, res) => {
+// 4a. Get Exam Modules Overview (Module-Wise Dashboard)
+router.get('/exams/:id/modules-overview', requireStudent, async (req, res) => {
+  try {
+    const examId = req.params.id;
+    const studentId = req.user.id;
+
+    const exam = await Exam.findById(examId).lean();
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found.' });
+    }
+
+    const registration = await ExamRegistration.findOne({ exam_id: exam._id, student_id: studentId });
+    if (!registration) {
+      return res.status(403).json({ error: 'You must register for this examination before accessing modules.' });
+    }
+
+    const latestSubmission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1, createdAt: -1 }).lean();
+    const totalAttempts = await ExamSubmission.countDocuments({ exam_id: exam._id, student_id: studentId, submitted_at: { $ne: null } });
+
+    // Fetch student answers for latest submission if any
+    let studentAnswersMap = {};
+    if (latestSubmission) {
+      const answers = await StudentAnswer.find({ submission_id: latestSubmission._id }).lean();
+      answers.forEach(a => {
+        studentAnswersMap[a.question_id.toString()] = a;
+      });
+    }
+
+    // Fetch all modules
+    const rawModules = await Module.find({ exam_id: exam._id }).sort({ order_num: 1 }).lean();
+
+    const modulesWithStats = await Promise.all(rawModules.map(async (m, idx) => {
+      const questions = await Question.find({ module_id: m._id }).lean();
+      const theoryCount = questions.filter(q => q.type === 'theory').length;
+      const mcqCount = questions.filter(q => q.type === 'mcq').length;
+      const codingCount = questions.filter(q => q.type === 'coding').length;
+      const moduleTotalMarks = questions.reduce((sum, q) => sum + (q.marks || 0), 0);
+
+      let answeredInModule = 0;
+      let scoreInModule = 0;
+      questions.forEach(q => {
+        const ans = studentAnswersMap[q._id.toString()];
+        if (ans && ans.answer) {
+          answeredInModule++;
+          scoreInModule += (ans.marks_obtained || 0);
+        }
+      });
+
+      const isCompleted = questions.length > 0 && answeredInModule === questions.length;
+      const isInProgress = answeredInModule > 0 && answeredInModule < questions.length;
+
+      return {
+        id: m._id.toString(),
+        module_number: m.order_num || (idx + 1),
+        title: m.title,
+        description: m.description,
+        order_num: m.order_num,
+        stats: {
+          total_questions: questions.length,
+          theory_count: theoryCount,
+          mcq_count: mcqCount,
+          coding_count: codingCount,
+          total_marks: moduleTotalMarks
+        },
+        progress: {
+          answered_count: answeredInModule,
+          module_score: scoreInModule,
+          is_completed: isCompleted,
+          is_in_progress: isInProgress,
+          status: isCompleted ? 'completed' : isInProgress ? 'in_progress' : 'not_started'
+        }
+      };
+    }));
+
+    const totalQuestionsAll = modulesWithStats.reduce((sum, m) => sum + m.stats.total_questions, 0);
+    const totalAnsweredAll = modulesWithStats.reduce((sum, m) => sum + m.progress.answered_count, 0);
+    const completedModulesCount = modulesWithStats.filter(m => m.progress.is_completed).length;
+
+    return res.json({
+      exam: {
+        ...exam,
+        id: exam._id.toString()
+      },
+      registration: registration.toJSON(),
+      submission: latestSubmission ? { ...latestSubmission, id: latestSubmission._id.toString() } : null,
+      total_attempts: totalAttempts,
+      modules: modulesWithStats,
+      overall_progress: {
+        total_modules: modulesWithStats.length,
+        completed_modules: completedModulesCount,
+        total_questions: totalQuestionsAll,
+        answered_questions: totalAnsweredAll,
+        percent_completed: totalQuestionsAll > 0 ? Math.round((totalAnsweredAll / totalQuestionsAll) * 100) : 0
+      }
+    });
+  } catch (err) {
+    console.error('Modules overview error:', err);
+    return res.status(500).json({ error: 'Failed to retrieve examination modules.' });
+  }
+});
+
+// 4b. Reattempt Exam (Initializes a brand new examination attempt)
+router.post('/exams/:id/reattempt', requireStudent, async (req, res) => {
   try {
     const examId = req.params.id;
     const studentId = req.user.id;
@@ -184,31 +318,92 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
       return res.status(403).json({ error: 'You are not registered for this examination. Please register first.' });
     }
 
-    let submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
+    const lastAttempt = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1 });
+    const nextAttemptNumber = lastAttempt ? (lastAttempt.attempt_number + 1) : 1;
 
-    if (submission && (submission.submitted_at || submission.is_cancelled)) {
-      return res.status(400).json({
-        error: submission.is_cancelled
-          ? 'This examination was cancelled due to security policy violations.'
-          : 'You have already completed and submitted this examination.',
-        submissionId: submission._id.toString(),
-        status: submission.status,
-        isCancelled: submission.is_cancelled || false,
-        cancelReason: submission.cancel_reason || null
-      });
+    const newSubmission = await ExamSubmission.create({
+      exam_id: exam._id,
+      student_id: studentId,
+      started_at: new Date(),
+      total_marks: exam.total_marks,
+      status: 'in_progress',
+      attempt_number: nextAttemptNumber,
+      tab_switch_count: 0,
+      is_cancelled: false,
+      cancel_reason: null
+    });
+
+    await ExamRegistration.updateOne({ _id: registration._id }, { status: 'in_progress' });
+
+    return res.status(201).json({
+      message: `Reattempt #${nextAttemptNumber} started successfully!`,
+      submissionId: newSubmission._id.toString(),
+      attemptNumber: nextAttemptNumber,
+      examId: exam._id.toString()
+    });
+  } catch (err) {
+    console.error('Reattempt exam error:', err);
+    return res.status(500).json({ error: 'Failed to initialize reattempt.' });
+  }
+});
+
+// 5. Start Exam (Loads Question Paper with Timer - supports Module-wise or Full Exam)
+router.post('/exams/:id/start', requireStudent, async (req, res) => {
+  try {
+    const examId = req.params.id;
+    const studentId = req.user.id;
+    const isReattemptRequest = Boolean(req.body?.reattempt || req.query?.reattempt === 'true');
+    const moduleId = req.body?.moduleId || req.query?.moduleId || null;
+
+    const exam = await Exam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ error: 'Exam not found.' });
     }
+
+    const registration = await ExamRegistration.findOne({ exam_id: exam._id, student_id: studentId });
+    if (!registration) {
+      return res.status(403).json({ error: 'You are not registered for this examination. Please register first.' });
+    }
+
+    // Look for active in-progress submission
+    let submission = await ExamSubmission.findOne({
+      exam_id: exam._id,
+      student_id: studentId,
+      submitted_at: null,
+      is_cancelled: { $ne: true }
+    }).sort({ attempt_number: -1, createdAt: -1 });
 
     const now = new Date();
     let startedAt;
 
     if (!submission) {
+      const lastAttempt = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1 });
+      
+      if (lastAttempt && (lastAttempt.submitted_at || lastAttempt.is_cancelled) && !isReattemptRequest) {
+        return res.status(400).json({
+          error: lastAttempt.is_cancelled
+            ? 'This examination attempt was cancelled due to security policy violations.'
+            : 'You have already completed and submitted this examination.',
+          submissionId: lastAttempt._id.toString(),
+          status: lastAttempt.status,
+          isCancelled: lastAttempt.is_cancelled || false,
+          cancelReason: lastAttempt.cancel_reason || null,
+          canReattempt: true,
+          attemptNumber: lastAttempt.attempt_number || 1
+        });
+      }
+
+      const nextAttemptNumber = lastAttempt ? (lastAttempt.attempt_number + 1) : 1;
       startedAt = now;
       submission = await ExamSubmission.create({
         exam_id: exam._id,
         student_id: studentId,
         started_at: startedAt,
         total_marks: exam.total_marks,
-        status: 'in_progress'
+        status: 'in_progress',
+        attempt_number: nextAttemptNumber,
+        tab_switch_count: 0,
+        is_cancelled: false
       });
 
       await ExamRegistration.updateOne({ _id: registration._id }, { status: 'in_progress' });
@@ -221,10 +416,22 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
     const elapsedMs = Date.now() - startTimeMs;
     const remainingSeconds = Math.max(0, Math.floor((durationMs - elapsedMs) / 1000));
 
-    // Fetch all questions for this exam
-    const modules = await Module.find({ exam_id: exam._id }).sort({ order_num: 1 }).lean();
+    // Fetch modules for this exam
+    let moduleFilter = { exam_id: exam._id };
+    let activeModule = null;
+
+    if (moduleId) {
+      activeModule = await Module.findOne({ _id: moduleId, exam_id: exam._id }).lean();
+      if (activeModule) {
+        moduleFilter._id = activeModule._id;
+      }
+    }
+
+    const modules = await Module.find(moduleFilter).sort({ order_num: 1 }).lean();
+    const allModulesForExam = await Module.find({ exam_id: exam._id }).sort({ order_num: 1 }).lean();
+    
     const moduleMap = {};
-    modules.forEach(m => { moduleMap[m._id.toString()] = m.title; });
+    allModulesForExam.forEach(m => { moduleMap[m._id.toString()] = m.title; });
     const moduleIds = modules.map(m => m._id);
 
     const rawQuestions = await Question.find({ module_id: { $in: moduleIds } }).lean();
@@ -288,7 +495,15 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
         passingMarks: exam.passing_marks,
         instructions: exam.instructions
       },
+      isModuleExam: Boolean(activeModule),
+      activeModule: activeModule ? {
+        id: activeModule._id.toString(),
+        title: activeModule.title,
+        description: activeModule.description,
+        order_num: activeModule.order_num
+      } : null,
       submissionId: submission._id.toString(),
+      attemptNumber: submission.attempt_number || 1,
       startedAt,
       remainingSeconds,
       tabSwitchCount: submission.tab_switch_count || 0,
@@ -315,25 +530,29 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
       return res.status(404).json({ error: 'Exam not found.' });
     }
 
-    // Atomic increment tab_switch_count ONLY if not already submitted or cancelled
-    const submission = await ExamSubmission.findOneAndUpdate(
-      { exam_id: exam._id, student_id: studentId, submitted_at: null, is_cancelled: { $ne: true } },
-      { $inc: { tab_switch_count: 1 } },
-      { new: true }
-    );
+    // Find latest active in-progress submission
+    const submission = await ExamSubmission.findOne({
+      exam_id: exam._id,
+      student_id: studentId,
+      submitted_at: null,
+      is_cancelled: { $ne: true }
+    }).sort({ attempt_number: -1, createdAt: -1 });
 
     if (!submission) {
-      const existing = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
+      const existing = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1 });
       if (existing && existing.is_cancelled) {
         return res.json({
           tabSwitchCount: existing.tab_switch_count,
           isCancelled: true,
           action: 'cancelled',
-          message: 'Exam has already been cancelled.'
+          message: 'Exam has already been cancelled.',
+          canReattempt: true
         });
       }
       return res.status(400).json({ error: 'No active examination session found.' });
     }
+
+    submission.tab_switch_count = (submission.tab_switch_count || 0) + 1;
 
     if (submission.tab_switch_count >= 2) {
       submission.is_cancelled = true;
@@ -351,9 +570,12 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
         tabSwitchCount: submission.tab_switch_count,
         isCancelled: true,
         action: 'cancelled',
-        message: 'Exam has been cancelled due to repeated tab switch violations.'
+        message: 'Exam has been cancelled due to repeated tab switch violations.',
+        canReattempt: true
       });
     }
+
+    await submission.save();
 
     return res.json({
       tabSwitchCount: submission.tab_switch_count,
@@ -379,7 +601,18 @@ router.post('/exams/:id/save-answers', requireStudent, async (req, res) => {
       return res.status(404).json({ error: 'Exam not found.' });
     }
 
-    const submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
+    // Find active submission or latest submission
+    let submission = await ExamSubmission.findOne({
+      exam_id: exam._id,
+      student_id: studentId,
+      submitted_at: null,
+      is_cancelled: { $ne: true }
+    }).sort({ attempt_number: -1, createdAt: -1 });
+
+    if (!submission) {
+      submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1 });
+    }
+
     if (!submission) {
       return res.status(404).json({ error: 'Submission session not found.' });
     }
@@ -416,7 +649,7 @@ router.post('/exams/:id/save-answers', requireStudent, async (req, res) => {
       savedCount++;
     }
 
-    return res.json({ message: 'Answers saved successfully.', savedCount });
+    return res.json({ message: 'Answers saved successfully.', savedCount, attemptNumber: submission.attempt_number || 1 });
   } catch (err) {
     console.error('Save answers error:', err);
     return res.status(500).json({ error: 'Failed to save answers.' });
@@ -435,17 +668,24 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
       return res.status(404).json({ error: 'Exam not found.' });
     }
 
-    const submission = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId });
-    if (!submission) {
-      return res.status(400).json({ error: 'No active examination session found to submit.' });
-    }
+    const submission = await ExamSubmission.findOne({
+      exam_id: exam._id,
+      student_id: studentId,
+      submitted_at: null,
+      is_cancelled: { $ne: true }
+    }).sort({ attempt_number: -1, createdAt: -1 });
 
-    if (submission.is_cancelled || submission.submitted_at) {
-      return res.status(400).json({
-        error: submission.is_cancelled
-          ? 'This examination was cancelled due to security policy violations and cannot be submitted.'
-          : 'This examination has already been submitted.'
-      });
+    if (!submission) {
+      const latest = await ExamSubmission.findOne({ exam_id: exam._id, student_id: studentId }).sort({ attempt_number: -1 });
+      if (latest && (latest.is_cancelled || latest.submitted_at)) {
+        return res.status(400).json({
+          error: latest.is_cancelled
+            ? 'This examination attempt was cancelled due to security policy violations and cannot be submitted.'
+            : 'This examination attempt has already been submitted.',
+          canReattempt: true
+        });
+      }
+      return res.status(400).json({ error: 'No active examination session found to submit.' });
     }
 
     const modules = await Module.find({ exam_id: exam._id }).select('_id');
@@ -543,6 +783,7 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
         examTitle: exam.title,
         studentName: studentRecord?.name || 'Student',
         submittedAt: submission.submitted_at.toISOString(),
+        attemptNumber: submission.attempt_number || 1,
         totalQuestions: examQuestions.length,
         attemptedQuestions: attemptedCount,
         unattemptedQuestions: Math.max(0, examQuestions.length - attemptedCount),

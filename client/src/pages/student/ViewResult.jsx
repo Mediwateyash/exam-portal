@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import CodeEditor from '../../components/CodeEditor';
 import { 
@@ -11,15 +11,18 @@ import {
   FileText, 
   AlertCircle,
   MessageSquare,
-  XCircle
+  XCircle,
+  RotateCcw
 } from 'lucide-react';
 
 export default function ViewResult() {
   const { submissionId } = useParams();
+  const navigate = useNavigate();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isReattempting, setIsReattempting] = useState(false);
 
   useEffect(() => {
     async function loadResult() {
@@ -34,6 +37,25 @@ export default function ViewResult() {
     }
     loadResult();
   }, [submissionId]);
+
+  const handleReattempt = async () => {
+    const examId = data?.submission?.exam_id;
+    if (!examId) return;
+
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be started with full time duration.')) {
+      return;
+    }
+
+    setIsReattempting(true);
+    setError('');
+    try {
+      await api.reattemptExam(examId);
+      navigate(`/exam/${examId}/instructions`);
+    } catch (err) {
+      setError(err.message || 'Failed to initialize reattempt.');
+      setIsReattempting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -55,6 +77,7 @@ export default function ViewResult() {
 
   const sub = data?.submission || {};
   const answers = data?.answers || [];
+  const otherAttempts = data?.other_attempts || [];
 
   const isGraded = sub.status === 'graded';
   const isPassed = sub.isPassed;
@@ -63,21 +86,38 @@ export default function ViewResult() {
     <div className="main-content" style={{ maxWidth: '960px' }}>
       {/* Top Header */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <Link
-          to="/student/results"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.35rem',
-            color: '#64748b',
-            fontSize: '0.875rem',
-            fontWeight: '600',
-            textDecoration: 'none',
-            marginBottom: '0.75rem'
-          }}
-        >
-          <ArrowLeft size={16} /> Back to Results History
-        </Link>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <Link
+            to="/student/results"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              color: '#64748b',
+              fontSize: '0.875rem',
+              fontWeight: '600',
+              textDecoration: 'none'
+            }}
+          >
+            <ArrowLeft size={16} /> Back to Results History
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleReattempt}
+            disabled={isReattempting}
+            className="btn btn-warning btn-sm"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              fontWeight: '700'
+            }}
+          >
+            <RotateCcw size={15} />
+            {isReattempting ? 'Preparing Reattempt...' : 'Reattempt Exam'}
+          </button>
+        </div>
 
         <div style={{
           display: 'flex',
@@ -93,6 +133,9 @@ export default function ViewResult() {
               }`}>
                 {isGraded ? (isPassed ? 'Passed' : 'Below Passing Marks') : 'Pending Theory Review'}
               </span>
+              <span className="badge badge-purple">
+                Attempt #{sub.attempt_number || 1}
+              </span>
             </div>
             <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#0f172a' }}>
               {sub.exam_title}
@@ -103,6 +146,53 @@ export default function ViewResult() {
           </div>
         </div>
       </div>
+
+      {/* Multi-Attempt Switcher Tabs if multiple attempts exist */}
+      {otherAttempts.length > 1 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.75rem 1rem',
+          background: '#f8fafc',
+          border: '1px solid #e2e8f0',
+          borderRadius: '10px',
+          marginBottom: '1.5rem',
+          overflowX: 'auto'
+        }}>
+          <span style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#64748b', whiteSpace: 'nowrap' }}>
+            All Attempts ({otherAttempts.length}):
+          </span>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {otherAttempts.map((att) => {
+              const isActive = att.id === sub.id;
+              return (
+                <Link
+                  key={att.id}
+                  to={`/student/results/${att.id}`}
+                  style={{
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '6px',
+                    fontSize: '0.8125rem',
+                    fontWeight: '700',
+                    textDecoration: 'none',
+                    background: isActive ? '#2563eb' : '#ffffff',
+                    color: isActive ? '#ffffff' : '#334155',
+                    border: `1px solid ${isActive ? '#2563eb' : '#cbd5e1'}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    boxShadow: isActive ? '0 2px 6px rgba(37, 99, 235, 0.25)' : 'none'
+                  }}
+                >
+                  <span>Attempt #{att.attempt_number || 1}</span>
+                  <span style={{ opacity: 0.85, fontSize: '0.75rem' }}>({att.percentage}%)</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="alert alert-danger">

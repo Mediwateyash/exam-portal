@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { 
   Award, 
@@ -8,13 +8,16 @@ import {
   FileText, 
   ArrowRight, 
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  RotateCcw
 } from 'lucide-react';
 
 export default function ResultsList() {
+  const navigate = useNavigate();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reattemptingId, setReattemptingId] = useState(null);
 
   useEffect(() => {
     async function loadResults() {
@@ -29,6 +32,22 @@ export default function ResultsList() {
     }
     loadResults();
   }, []);
+
+  const handleReattempt = async (examId) => {
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be initialized with full time duration.')) {
+      return;
+    }
+
+    setReattemptingId(examId);
+    setError('');
+    try {
+      await api.reattemptExam(examId);
+      navigate(`/exam/${examId}/instructions`);
+    } catch (err) {
+      setError(err.message || 'Failed to initialize reattempt.');
+      setReattemptingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -98,13 +117,17 @@ export default function ResultsList() {
                 }}
               >
                 <div style={{ flex: 1, minWidth: '280px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
                     <span className={`badge ${
                       isGraded
                         ? (isPassed ? 'badge-success' : 'badge-danger')
                         : 'badge-warning'
                     }`}>
                       {isGraded ? (isPassed ? 'Passed' : 'Needs Improvement') : 'Under Theory Review'}
+                    </span>
+
+                    <span className="badge badge-purple">
+                      Attempt #{res.attempt_number || 1}
                     </span>
 
                     <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
@@ -126,8 +149,8 @@ export default function ResultsList() {
                   </div>
                 </div>
 
-                {/* Score Summary Badge & Button */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                {/* Score Summary Badge & Buttons */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '1.5rem', fontWeight: '800', color: '#0f172a', lineHeight: '1.1' }}>
                       {res.score} <span style={{ fontSize: '1rem', color: '#64748b' }}>/ {res.total_marks}</span>
@@ -141,13 +164,31 @@ export default function ResultsList() {
                     </div>
                   </div>
 
-                  <Link
-                    to={`/student/results/${res.submission_id}`}
-                    className="btn btn-primary"
-                  >
-                    View Result
-                    <ArrowRight size={16} />
-                  </Link>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleReattempt(res.exam_id)}
+                      disabled={reattemptingId === res.exam_id}
+                      className="btn btn-outline-warning"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontWeight: '700'
+                      }}
+                    >
+                      <RotateCcw size={15} />
+                      {reattemptingId === res.exam_id ? 'Retrying...' : 'Reattempt'}
+                    </button>
+
+                    <Link
+                      to={`/student/results/${res.submission_id}`}
+                      className="btn btn-primary"
+                    >
+                      View Result
+                      <ArrowRight size={16} />
+                    </Link>
+                  </div>
                 </div>
               </div>
             );
@@ -157,3 +198,4 @@ export default function ResultsList() {
     </div>
   );
 }
+

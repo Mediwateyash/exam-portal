@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import { 
   ArrowLeft, 
@@ -10,28 +10,35 @@ import {
   AlertTriangle, 
   FileText, 
   ShieldAlert,
-  Play
+  Play,
+  Layers
 } from 'lucide-react';
 
 export default function ExamInstructions() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const moduleId = searchParams.get('moduleId');
 
   const [examData, setExamData] = useState(null);
+  const [targetModule, setTargetModule] = useState(null);
   const [stats, setStats] = useState({});
+  const [latestSubmission, setLatestSubmission] = useState(null);
+  const [allAttempts, setAllAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     async function loadInstructions() {
       try {
-        const res = await api.getExamInstructions(id);
+        const res = await api.getExamInstructions(id, moduleId);
         setExamData(res.exam);
+        setTargetModule(res.targetModule || null);
         setStats(res.stats || {});
-        if (res.submission && (res.submission.status === 'submitted' || res.submission.status === 'graded' || res.submission.status === 'cancelled' || res.submission.is_cancelled)) {
-          navigate(`/student/results/${res.submission.id}`);
-        }
+        setLatestSubmission(res.submission);
+        setAllAttempts(res.all_attempts || []);
       } catch (err) {
         setError(err.message || 'Failed to load examination instructions.');
       } finally {
@@ -39,26 +46,47 @@ export default function ExamInstructions() {
       }
     }
     loadInstructions();
-  }, [id, navigate]);
+  }, [id, moduleId]);
+
+  const isPreviousCompleted = latestSubmission && (
+    latestSubmission.status === 'submitted' ||
+    latestSubmission.status === 'graded' ||
+    latestSubmission.status === 'cancelled' ||
+    latestSubmission.is_cancelled
+  );
+
+  const nextAttemptNum = isPreviousCompleted
+    ? (latestSubmission.attempt_number ? latestSubmission.attempt_number + 1 : 2)
+    : (latestSubmission?.attempt_number || 1);
 
   const handleStartExam = async () => {
     if (!agreed) {
       alert('Please check the confirmation box to acknowledge exam regulations.');
       return;
     }
+
+    setStarting(true);
+    setError('');
+
     try {
+      if (isPreviousCompleted) {
+        await api.reattemptExam(id);
+      }
+
       const elem = document.documentElement;
       if (elem.requestFullscreen) {
-        await elem.requestFullscreen();
+        await elem.requestFullscreen().catch(() => {});
       } else if (elem.webkitRequestFullscreen) {
-        await elem.webkitRequestFullscreen();
+        await elem.webkitRequestFullscreen().catch(() => {});
       } else if (elem.msRequestFullscreen) {
-        await elem.msRequestFullscreen();
+        await elem.msRequestFullscreen().catch(() => {});
       }
+
+      navigate(`/exam/${id}/take${moduleId ? `?moduleId=${moduleId}` : ''}`);
     } catch (err) {
-      console.warn('Fullscreen request denied or not supported by browser:', err);
+      setError(err.message || 'Failed to initialize examination.');
+      setStarting(false);
     }
-    navigate(`/exam/${id}/take`);
   };
 
   if (loading) {
@@ -85,7 +113,7 @@ export default function ExamInstructions() {
     <div className="main-content" style={{ maxWidth: '850px' }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <Link
-          to="/student/my-exams"
+          to={moduleId ? `/exam/${id}/modules` : '/student/my-exams'}
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -97,13 +125,22 @@ export default function ExamInstructions() {
             marginBottom: '0.75rem'
           }}
         >
-          <ArrowLeft size={16} /> Back to My Exams
+          <ArrowLeft size={16} /> {moduleId ? 'Back to Exam Modules' : 'Back to My Exams'}
         </Link>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#0f172a' }}>
-          Examination Instructions & Regulations
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+          <h1 style={{ fontSize: '1.875rem', fontWeight: '800', color: '#0f172a' }}>
+            Examination Instructions & Regulations
+          </h1>
+          {targetModule && (
+            <span className="badge badge-primary" style={{ fontSize: '0.8125rem', padding: '0.3rem 0.75rem' }}>
+              Module: {targetModule.title}
+            </span>
+          )}
+        </div>
         <p style={{ color: '#64748b', fontSize: '0.9375rem', marginTop: '0.2rem' }}>
-          Please carefully review the guidelines before commencing the timed examination.
+          {targetModule 
+            ? `Review the guidelines below before commencing the exam for Module: ${targetModule.title}.` 
+            : 'Please carefully review the guidelines before commencing the timed examination.'}
         </p>
       </div>
 
@@ -117,12 +154,24 @@ export default function ExamInstructions() {
       {/* Official Header Card */}
       <div className="card" style={{ padding: '2rem', marginBottom: '1.5rem' }}>
         <div style={{ borderBottom: '2px solid #0f172a', paddingBottom: '1rem', marginBottom: '1.5rem' }}>
-          <div style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Official Examination Document
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ fontSize: '0.8125rem', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              Official Examination Document
+            </div>
+            {targetModule && (
+              <span className="badge badge-purple" style={{ fontSize: '0.75rem' }}>
+                Single Module Evaluation
+              </span>
+            )}
           </div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#0f172a', marginTop: '0.25rem' }}>
             {exam.title}
           </h2>
+          {targetModule && (
+            <div style={{ marginTop: '0.5rem', fontSize: '1.05rem', fontWeight: '700', color: '#2563eb' }}>
+              Focus: {targetModule.title}
+            </div>
+          )}
         </div>
 
         {/* Specs Strip */}
@@ -253,15 +302,46 @@ export default function ExamInstructions() {
           </label>
         </div>
 
+        {/* Previous Attempt Summary Banner if applicable */}
+        {latestSubmission && isPreviousCompleted && (
+          <div style={{
+            background: '#f5f3ff',
+            border: '1.5px solid #ddd6fe',
+            borderRadius: '8px',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '1rem'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: '800', color: '#6d28d9', textTransform: 'uppercase' }}>
+                Previous Attempt #{latestSubmission.attempt_number || 1} Recorded
+              </div>
+              <div style={{ fontSize: '0.875rem', color: '#5b21b6', marginTop: '0.2rem' }}>
+                Status: <strong>{latestSubmission.status.toUpperCase()}</strong> • Score: <strong>{latestSubmission.score} / {latestSubmission.total_marks}</strong> ({latestSubmission.percentage}%)
+              </div>
+            </div>
+            <Link
+              to={`/student/results/${latestSubmission.id}`}
+              className="btn btn-secondary btn-sm"
+            >
+              View Previous Result
+            </Link>
+          </div>
+        )}
+
         {/* Launch Button */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-          <Link to="/student/my-exams" className="btn btn-secondary">
+          <Link to={moduleId ? `/exam/${id}/modules` : '/student/my-exams'} className="btn btn-secondary">
             Cancel
           </Link>
           <button
             type="button"
             onClick={handleStartExam}
-            disabled={!agreed}
+            disabled={!agreed || starting}
             className="btn btn-primary btn-lg"
             style={{
               background: agreed ? 'linear-gradient(135deg, #2563eb, #1d4ed8)' : '#cbd5e1',
@@ -269,7 +349,13 @@ export default function ExamInstructions() {
             }}
           >
             <Play size={18} />
-            Start Examination Now
+            {starting
+              ? 'Initializing Session...'
+              : targetModule
+                ? `Start Module Exam (${targetModule.title})`
+                : isPreviousCompleted
+                  ? `Start Reattempt (Attempt #${nextAttemptNum})`
+                  : 'Start Examination Now'}
           </button>
         </div>
       </div>

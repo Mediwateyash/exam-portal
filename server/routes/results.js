@@ -39,6 +39,7 @@ router.get('/', requireStudent, async (req, res) => {
       return {
         submission_id: s._id.toString(),
         exam_id: examId.toString(),
+        attempt_number: s.attempt_number || 1,
         started_at: s.started_at,
         submitted_at: s.submitted_at,
         score: s.score,
@@ -54,6 +55,7 @@ router.get('/', requireStudent, async (req, res) => {
         passing_marks: exam.passing_marks,
         total_questions: totalQuestions,
         answered_questions: answeredCount,
+        can_reattempt: true,
         isPassed
       };
     }));
@@ -81,6 +83,17 @@ router.get('/:submissionId', requireStudent, async (req, res) => {
     }
 
     const exam = submission.exam_id;
+
+    // Fetch all attempts by this student for this exam
+    const otherAttempts = await ExamSubmission.find({
+      exam_id: exam._id,
+      student_id: studentId,
+      submitted_at: { $ne: null }
+    })
+      .sort({ attempt_number: -1 })
+      .select('_id attempt_number score total_marks percentage status submitted_at is_cancelled')
+      .lean();
+
     const modules = await Module.find({ exam_id: exam._id }).sort({ order_num: 1 }).lean();
     const moduleMap = {};
     modules.forEach(m => { moduleMap[m._id.toString()] = m.title; });
@@ -122,10 +135,12 @@ router.get('/:submissionId', requireStudent, async (req, res) => {
     return res.json({
       submission: {
         id: submission._id.toString(),
+        exam_id: exam._id.toString(),
         exam_title: exam.title,
         exam_description: exam.description,
         passing_marks: exam.passing_marks,
         instructions: exam.instructions,
+        attempt_number: submission.attempt_number || 1,
         started_at: submission.started_at,
         submitted_at: submission.submitted_at,
         score: submission.score,
@@ -135,8 +150,10 @@ router.get('/:submissionId', requireStudent, async (req, res) => {
         tab_switch_count: submission.tab_switch_count || 0,
         is_cancelled: submission.is_cancelled || false,
         cancel_reason: submission.cancel_reason || null,
+        can_reattempt: true,
         isPassed
       },
+      other_attempts: otherAttempts.map(a => ({ ...a, id: a._id.toString() })),
       answers: breakdown
     });
   } catch (err) {

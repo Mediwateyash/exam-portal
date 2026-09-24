@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import QuestionPalette from '../../components/QuestionPalette';
 import ConfirmationModal from '../../components/ConfirmationModal';
@@ -27,10 +27,14 @@ import '../../styles/exampaper.css';
 export default function ExamPaper() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const moduleId = searchParams.get('moduleId');
 
   // Core Exam State
   const [exam, setExam] = useState(null);
+  const [activeModule, setActiveModule] = useState(null);
   const [submissionId, setSubmissionId] = useState(null);
+  const [attemptNumber, setAttemptNumber] = useState(1);
   const [questions, setQuestions] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -58,6 +62,18 @@ export default function ExamPaper() {
       setIsFullscreen(true);
     } catch (err) {
       console.warn('Could not enter fullscreen:', err);
+    }
+  };
+
+  const handleReattemptFromPaper = async () => {
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be initialized with full time duration.')) {
+      return;
+    }
+    try {
+      await api.reattemptExam(id);
+      navigate(`/exam/${id}/instructions`);
+    } catch (err) {
+      alert(err.message || 'Failed to initialize reattempt.');
     }
   };
 
@@ -95,9 +111,11 @@ export default function ExamPaper() {
   useEffect(() => {
     async function initExam() {
       try {
-        const res = await api.startExam(id);
+        const res = await api.startExam(id, false, moduleId);
         setExam(res.exam);
+        setActiveModule(res.activeModule || null);
         setSubmissionId(res.submissionId);
+        setAttemptNumber(res.attemptNumber || 1);
         setQuestions(res.questions || []);
         setRemainingSeconds(res.remainingSeconds || res.exam.duration * 60);
 
@@ -125,7 +143,7 @@ export default function ExamPaper() {
       }
     }
     initExam();
-  }, [id, navigate]);
+  }, [id, moduleId, navigate]);
 
   // 2. Security: Record Tab Switch Violation
   const handleTabViolation = async () => {
@@ -331,12 +349,12 @@ export default function ExamPaper() {
         language: answers[qId]?.language || 'javascript'
       }));
 
-      const res = await api.submitExam(id, formattedAnswers, 0);
+      const res = await api.submitExam(id, formattedAnswers, 0, moduleId);
       setShowSubmitModal(false);
       if (document.fullscreenElement && document.exitFullscreen) {
         try { await document.exitFullscreen(); } catch (e) {}
       }
-      navigate(`/exam/${id}/submitted`, { state: { submission: res.submission, isAuto } });
+      navigate(`/exam/${id}/submitted`, { state: { submission: res.submission, isAuto, moduleId, activeModule, examId: id } });
     } catch (err) {
       alert(err.message || 'Error occurred while submitting examination.');
       setIsSubmitting(false);
@@ -473,9 +491,20 @@ export default function ExamPaper() {
             </div>
           </div>
 
-          <Link to="/student/my-exams" className="btn btn-primary btn-lg" style={{ display: 'inline-flex', marginBottom: '1.5rem' }}>
-            Return to My Exams Dashboard
-          </Link>
+          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            <button
+              type="button"
+              onClick={handleReattemptFromPaper}
+              className="btn btn-warning btn-lg"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: '700' }}
+            >
+              <RotateCcw size={18} />
+              Reattempt Examination
+            </button>
+            <Link to="/student/my-exams" className="btn btn-secondary btn-lg" style={{ display: 'inline-flex' }}>
+              Return to My Exams
+            </Link>
+          </div>
 
           <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
             ExamDesk • Designed &amp; Developed by <strong style={{ color: '#64748b' }}>Yash Diwate</strong>
@@ -555,6 +584,14 @@ export default function ExamPaper() {
           <GraduationCap size={22} color="#3b82f6" />
           <span className="exam-logo-text">ExamDesk</span>
           <span className="exam-badge-official">Official Examination</span>
+          <span className="badge badge-purple" style={{ fontSize: '0.75rem', padding: '0.2rem 0.55rem' }}>
+            Attempt #{attemptNumber}
+          </span>
+          {activeModule && (
+            <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.75rem', padding: '0.2rem 0.55rem' }}>
+              <Layers size={12} /> {activeModule.title}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
@@ -627,6 +664,24 @@ export default function ExamPaper() {
           <div className="paper-header">
             <div className="paper-super-title">EXAMINATION PAPER</div>
             <h1 className="paper-exam-title">{exam?.title}</h1>
+            {activeModule && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                border: '1px solid #bfdbfe',
+                borderRadius: '6px',
+                padding: '0.3rem 0.75rem',
+                fontSize: '0.875rem',
+                fontWeight: '700',
+                marginTop: '0.4rem',
+                marginBottom: '0.2rem'
+              }}>
+                <Layers size={15} /> Module Assessment: {activeModule.title}
+              </div>
+            )}
             <div className="paper-meta-strip">
               <span><strong>Duration:</strong> {exam?.duration} Minutes</span>
               <span><strong>Maximum Marks:</strong> {exam?.totalMarks || 100}</span>

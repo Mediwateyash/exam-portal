@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../services/api';
 import { 
   FileText, 
@@ -10,13 +10,17 @@ import {
   Play, 
   HelpCircle, 
   AlertCircle,
-  BookOpen
+  BookOpen,
+  RotateCcw,
+  Layers
 } from 'lucide-react';
 
 export default function MyExams() {
+  const navigate = useNavigate();
   const [myExams, setMyExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reattemptingId, setReattemptingId] = useState(null);
 
   useEffect(() => {
     async function loadMyExams() {
@@ -31,6 +35,22 @@ export default function MyExams() {
     }
     loadMyExams();
   }, []);
+
+  const handleReattempt = async (examId) => {
+    if (!window.confirm('Are you sure you want to reattempt this examination? A fresh examination session will be initialized with full time duration.')) {
+      return;
+    }
+
+    setReattemptingId(examId);
+    setError('');
+    try {
+      await api.reattemptExam(examId);
+      navigate(`/exam/${examId}/instructions`);
+    } catch (err) {
+      setError(err.message || 'Failed to initialize reattempt.');
+      setReattemptingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -57,7 +77,7 @@ export default function MyExams() {
           My Registered Examinations
         </h1>
         <p style={{ color: '#64748b', fontSize: '0.9375rem', marginTop: '0.2rem' }}>
-          Access your registered tests, continue ongoing exam sessions, or review submitted attempts.
+          Access your registered tests, continue ongoing exam sessions, reattempt tests, or review submitted attempts.
         </p>
       </div>
 
@@ -97,12 +117,19 @@ export default function MyExams() {
                 }}
               >
                 <div style={{ flex: 1, minWidth: '280px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
                     <span className={`badge ${
                       isSubmitted ? 'badge-success' : 'badge-primary'
                     }`}>
                       {isSubmitted ? 'Submitted' : 'Ready to Start'}
                     </span>
+
+                    {isSubmitted && item.attempt_number && (
+                      <span className="badge badge-purple">
+                        Attempt #{item.attempt_number}
+                      </span>
+                    )}
+
                     <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
                       Registered on: {new Date(item.registered_at).toLocaleDateString()}
                     </span>
@@ -127,25 +154,56 @@ export default function MyExams() {
 
                 <div>
                   {isSubmitted ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span className="badge badge-success" style={{ padding: '0.4rem 0.75rem' }}>
-                        <CheckCircle2 size={14} /> Completed
-                      </span>
-                      <Link to={`/student/results/${item.submission_id}`} className="btn btn-outline-primary">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      <Link
+                        to={`/exam/${item.id}/modules`}
+                        className="btn btn-outline-primary"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontWeight: '700'
+                        }}
+                      >
+                        <Layers size={15} />
+                        Modules Desk
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => handleReattempt(item.id)}
+                        disabled={reattemptingId === item.id}
+                        className="btn btn-outline-warning"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          fontWeight: '700'
+                        }}
+                      >
+                        <RotateCcw size={15} />
+                        {reattemptingId === item.id ? 'Starting...' : 'Reattempt'}
+                      </button>
+
+                      <Link to={`/student/results/${item.submission_id}`} className="btn btn-primary">
                         View Result
                       </Link>
                     </div>
                   ) : (
                     <Link
-                      to={`/exam/${item.id}/instructions`}
+                      to={`/exam/${item.id}/modules`}
                       className="btn btn-primary btn-lg"
                       style={{
                         background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
-                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)'
+                        boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontWeight: '700'
                       }}
                     >
-                      <Play size={16} />
-                      Start Examination
+                      <Layers size={17} />
+                      View Modules &amp; Start Exam
                     </Link>
                   )}
                 </div>
@@ -157,3 +215,4 @@ export default function MyExams() {
     </div>
   );
 }
+

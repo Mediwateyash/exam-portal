@@ -22,6 +22,7 @@ import EvaluateSubmission from './pages/admin/EvaluateSubmission';
 // Student Pages
 import StudentDashboard from './pages/student/Dashboard';
 import MyExams from './pages/student/MyExams';
+import ExamModules from './pages/student/ExamModules';
 import ExamInstructions from './pages/student/ExamInstructions';
 import ExamPaper from './pages/student/ExamPaper';
 import ExamSubmitted from './pages/student/ExamSubmitted';
@@ -127,6 +128,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredRole="student">
                   <MyExams />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/exam/:id/modules"
+              element={
+                <ProtectedRoute requiredRole="student">
+                  <ExamModules />
                 </ProtectedRoute>
               }
             />
