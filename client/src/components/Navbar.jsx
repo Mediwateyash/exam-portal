@@ -128,6 +128,14 @@ export default function Navbar() {
                   <CheckSquare size={16} />
                   Submissions
                 </Link>
+                <Link
+                  to="/admin/telemetry"
+                  className={`btn btn-sm ${isActive('/admin/telemetry') ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                >
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  Telemetry
+                </Link>
               </>
             ) : (
               <>

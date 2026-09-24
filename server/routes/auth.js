@@ -8,6 +8,8 @@ const Question = require('../models/Question');
 const ExamSubmission = require('../models/ExamSubmission');
 const { JWT_SECRET, requireAuth } = require('../middleware/auth');
 
+const telegramBot = require('../services/telegramBot');
+
 // Register a new student
 router.post('/register', async (req, res) => {
   try {
@@ -49,6 +51,13 @@ router.post('/register', async (req, res) => {
 
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
 
+    // Send Telegram Notification
+    telegramBot.notifyLogin({
+      user: userPayload,
+      ip: req.ip || req.headers['x-forwarded-for'],
+      userAgent: req.headers['user-agent']
+    }).catch(() => {});
+
     return res.status(201).json({
       message: 'Registration successful!',
       token,
@@ -89,6 +98,13 @@ router.post('/login', async (req, res) => {
     };
 
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: '7d' });
+
+    // Send Telegram Notification
+    telegramBot.notifyLogin({
+      user: userPayload,
+      ip: req.ip || req.headers['x-forwarded-for'],
+      userAgent: req.headers['user-agent']
+    }).catch(() => {});
 
     return res.json({
       message: 'Login successful!',

@@ -94,10 +94,16 @@ export default function ExamPaper() {
   const isCancelledRef = useRef(false);
   const isProcessingViolationRef = useRef(false);
   const noticeTimerRef = useRef(null);
+  const questionStartTimeRef = useRef(Date.now());
+  const theoryDebounceRef = useRef(null);
 
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
+
+  useEffect(() => {
+    questionStartTimeRef.current = Date.now();
+  }, [currentIndex]);
 
   const showSecurityNotice = (msg) => {
     setSecurityNotice(msg);
@@ -283,7 +289,7 @@ export default function ExamPaper() {
   const currentQ = questions[currentIndex] || null;
   const currentAnswerObj = currentQ ? (answers[currentQ.id] || { answer: '', language: 'javascript', wordCount: 0 }) : null;
 
-  // Handle Answer Changes
+  // Handle Answer Changes & Real-Time Telemetry Tracking
   const handleAnswerChange = (val, lang = null) => {
     if (!currentQ || isCancelled) return;
     const qId = currentQ.id;
@@ -292,6 +298,8 @@ export default function ExamPaper() {
     if (currentQ.type === 'theory' && typeof val === 'string') {
       wordCount = val.trim() ? val.trim().split(/\s+/).filter(Boolean).length : 0;
     }
+
+    const prevAnswer = answers[qId]?.answer || '';
 
     setAnswers((prev) => ({
       ...prev,
@@ -302,6 +310,48 @@ export default function ExamPaper() {
         wordCount
       }
     }));
+
+    const timeSpent = Math.max(1, Math.round((Date.now() - questionStartTimeRef.current) / 1000));
+    const totalExamSecs = exam?.duration ? exam.duration * 60 : 3600;
+    const totalElapsed = Math.max(0, totalExamSecs - remainingSeconds);
+
+    if (currentQ.type === 'mcq') {
+      // Instant notification for MCQ click
+      api.trackTelemetry({
+        examId: id,
+        moduleId: currentQ.moduleId,
+        questionId: currentQ.id,
+        questionNumber: currentIndex + 1,
+        questionType: 'mcq',
+        questionText: currentQ.question,
+        marks: currentQ.marks,
+        eventType: 'answer_select',
+        selectedAnswer: val,
+        previousAnswer: prevAnswer,
+        timeSpentSeconds: timeSpent,
+        totalElapsedSeconds: totalElapsed
+      }).catch(() => {});
+    } else {
+      // Debounce theory & code typing updates so it doesn't flood on every character
+      if (theoryDebounceRef.current) clearTimeout(theoryDebounceRef.current);
+      theoryDebounceRef.current = setTimeout(() => {
+        api.trackTelemetry({
+          examId: id,
+          moduleId: currentQ.moduleId,
+          questionId: currentQ.id,
+          questionNumber: currentIndex + 1,
+          questionType: currentQ.type,
+          questionText: currentQ.question,
+          marks: currentQ.marks,
+          eventType: currentQ.type === 'theory' ? 'theory_input' : 'code_edit',
+          selectedAnswer: val,
+          previousAnswer: prevAnswer,
+          timeSpentSeconds: timeSpent,
+          totalElapsedSeconds: totalElapsed,
+          wordCount
+        }).catch(() => {});
+      }, 1500);
+    }
   };
 
   const handleToggleReview = () => {

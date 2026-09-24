@@ -11,6 +11,8 @@ const questionsRoutes = require('./routes/questions');
 const studentRoutes = require('./routes/student');
 const submissionsRoutes = require('./routes/submissions');
 const resultsRoutes = require('./routes/results');
+const telemetryRoutes = require('./routes/telemetry');
+const telegramBot = require('./services/telegramBot');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,6 +34,7 @@ app.get('/api/health', (req, res) => {
     app: 'ExamDesk',
     tagline: 'Your Digital Examination Desk',
     database: 'MongoDB Atlas',
+    telegramBot: telegramBot.isConfigured ? 'configured' : 'unconfigured',
     timestamp: new Date().toISOString()
   });
 });
@@ -43,6 +46,7 @@ app.use('/api/questions', questionsRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/submissions', submissionsRoutes);
 app.use('/api/results', resultsRoutes);
+app.use('/api/telemetry', telemetryRoutes);
 
 // Static frontend build serve
 const clientDist = path.resolve(__dirname, '../client/dist');
@@ -74,8 +78,13 @@ connectDB()
       console.log(`=========================================`);
       console.log(`  EXAMDESK — Online Examination Portal   `);
       console.log(`  Connected to MongoDB Atlas: [examdesk] `);
+      console.log(`  Telegram Bot: ${telegramBot.isConfigured ? '🟢 Active & Ready' : '⚪ (Set TELEGRAM_BOT_TOKEN in .env)'}`);
       console.log(`  Server running on http://localhost:${PORT}`);
       console.log(`=========================================`);
+
+      if (telegramBot.token) {
+        telegramBot.startPolling();
+      }
     });
   })
   .catch(err => {

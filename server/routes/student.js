@@ -9,6 +9,7 @@ const ExamSubmission = require('../models/ExamSubmission');
 const StudentAnswer = require('../models/StudentAnswer');
 const User = require('../models/User');
 const { requireStudent, requireAuth } = require('../middleware/auth');
+const telegramBot = require('../services/telegramBot');
 
 // 1. Available Exams for Student
 router.get('/exams', requireAuth, async (req, res) => {
@@ -485,6 +486,17 @@ router.post('/exams/:id/start', requireStudent, async (req, res) => {
       };
     });
 
+    // Send Telegram Notification
+    User.findById(studentId).lean().then(studentUser => {
+      telegramBot.notifyExamStart({
+        student: studentUser || { name: 'Student', email: req.user.email },
+        exam,
+        targetModule: activeModule,
+        attemptNumber: submission.attempt_number || 1,
+        duration: exam.duration
+      }).catch(() => {});
+    }).catch(() => {});
+
     return res.json({
       exam: {
         id: exam._id.toString(),
@@ -566,6 +578,17 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
         { status: 'completed' }
       );
 
+      // Send Telegram Proctoring Violation Alert
+      User.findById(studentId).lean().then(studentUser => {
+        telegramBot.notifySecurityViolation({
+          student: studentUser || { name: 'Student', email: req.user.email },
+          exam,
+          violationType: violationType || 'tab_switch',
+          count: submission.tab_switch_count,
+          action: 'cancelled'
+        }).catch(() => {});
+      }).catch(() => {});
+
       return res.json({
         tabSwitchCount: submission.tab_switch_count,
         isCancelled: true,
@@ -576,6 +599,17 @@ router.post('/exams/:id/security-violation', requireStudent, async (req, res) =>
     }
 
     await submission.save();
+
+    // Send Telegram Warning Alert
+    User.findById(studentId).lean().then(studentUser => {
+      telegramBot.notifySecurityViolation({
+        student: studentUser || { name: 'Student', email: req.user.email },
+        exam,
+        violationType: violationType || 'tab_switch',
+        count: submission.tab_switch_count,
+        action: 'warning'
+      }).catch(() => {});
+    }).catch(() => {});
 
     return res.json({
       tabSwitchCount: submission.tab_switch_count,
@@ -774,6 +808,22 @@ router.post('/exams/:id/submit', requireStudent, async (req, res) => {
     await ExamRegistration.updateOne({ exam_id: exam._id, student_id: studentId }, { status: 'completed' });
 
     const studentRecord = await User.findById(studentId);
+    const elapsedSeconds = submission.started_at ? Math.floor((new Date().getTime() - new Date(submission.started_at).getTime()) / 1000) : 0;
+
+    // Send Telegram Exam Submission Alert
+    telegramBot.notifyExamSubmission({
+      student: studentRecord || { name: 'Student', email: req.user.email },
+      exam,
+      targetModule: null,
+      attemptNumber: submission.attempt_number || 1,
+      score: autoScore,
+      totalMarks: totalMarks,
+      percentage: percentage,
+      attemptedCount: attemptedCount,
+      totalQuestions: examQuestions.length,
+      totalTimeSpentSeconds: elapsedSeconds,
+      status: finalStatus
+    }).catch(() => {});
 
     return res.json({
       message: 'Examination submitted successfully!',

@@ -138,8 +138,8 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Hero Action: Generate & Manage Quick Links */}
-      <div className="grid-2" style={{ marginBottom: '2.5rem' }}>
+      {/* Hero Action: Generate, Manage & Telemetry Quick Links */}
+      <div className="grid-3" style={{ marginBottom: '2.5rem' }}>
         <div className="card" style={{
           background: 'linear-gradient(135deg, #1e293b, #0f172a)',
           color: '#ffffff',
@@ -154,10 +154,10 @@ export default function AdminDashboard() {
               Exam Creator
             </span>
             <h2 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#ffffff', marginBottom: '0.5rem' }}>
-              Create a New Examination
+              Create an Examination
             </h2>
             <p style={{ color: '#94a3b8', fontSize: '0.875rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-              Configure exam duration, marks, instructions, add modular topics, and import questions seamlessly via JSON.
+              Configure duration, marks, modules, and import questions via JSON.
             </p>
           </div>
           <Link to="/admin/generate-exam" className="btn btn-primary" style={{ alignSelf: 'flex-start' }}>
@@ -175,18 +175,42 @@ export default function AdminDashboard() {
         }}>
           <div>
             <span className="badge badge-purple" style={{ marginBottom: '0.75rem' }}>
-              Submissions & Grading
+              Submissions &amp; Grading
             </span>
             <h2 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#0f172a', marginBottom: '0.5rem' }}>
-              Evaluate Student Submissions
+              Evaluate Submissions
             </h2>
             <p style={{ color: '#64748b', fontSize: '0.875rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
-              Review student theory answers with word limits, inspect coding solutions, and record manual evaluation grades.
+              Review student theory answers with word limits and record manual evaluation grades.
             </p>
           </div>
           <Link to="/admin/submissions" className="btn btn-secondary" style={{ alignSelf: 'flex-start' }}>
             <ClipboardCheck size={16} />
             View Submissions ({stats.totalSubmissions || 0})
+          </Link>
+        </div>
+
+        <div className="card" style={{
+          background: '#f0f9ff',
+          border: '1.5px solid #bae6fd',
+          padding: '1.75rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <span className="badge badge-primary" style={{ marginBottom: '0.75rem', background: '#0284c7', color: '#ffffff' }}>
+              Telegram Proctor Bot
+            </span>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: '700', color: '#0c4a6e', marginBottom: '0.5rem' }}>
+              Live Telemetry &amp; Alerts
+            </h2>
+            <p style={{ color: '#0369a1', fontSize: '0.875rem', marginBottom: '1.5rem', lineHeight: '1.6' }}>
+              Receive instant Telegram alerts for student logins, option clicks, and time spent on questions.
+            </p>
+          </div>
+          <Link to="/admin/telemetry" className="btn btn-primary" style={{ alignSelf: 'flex-start', background: '#0284c7' }}>
+            Inspect Live Feed
           </Link>
         </div>
       </div>

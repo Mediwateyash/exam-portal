@@ -18,6 +18,7 @@ import ManageExams from './pages/admin/ManageExams';
 import ManageExamDetails from './pages/admin/ManageExamDetails';
 import SubmissionsList from './pages/admin/SubmissionsList';
 import EvaluateSubmission from './pages/admin/EvaluateSubmission';
+import LiveTelemetry from './pages/admin/LiveTelemetry';
 
 // Student Pages
 import StudentDashboard from './pages/student/Dashboard';
@@ -110,6 +111,14 @@ export default function App() {
               element={
                 <ProtectedRoute requiredRole="admin">
                   <EvaluateSubmission />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/telemetry"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <LiveTelemetry />
                 </ProtectedRoute>
               }
             />

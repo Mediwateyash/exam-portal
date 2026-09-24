@@ -91,7 +91,16 @@ export const api = {
 
   // Results (Student)
   getStudentResults: () => request('/results'),
-  getStudentResultDetail: (submissionId) => request(`/results/${submissionId}`)
+  getStudentResultDetail: (submissionId) => request(`/results/${submissionId}`),
+
+  // Telemetry & Telegram Proctoring
+  trackTelemetry: (telemetryData) => request('/telemetry/event', { method: 'POST', body: telemetryData }),
+  testTelegramBot: (customConfig = {}) => request('/telemetry/test-telegram', { method: 'POST', body: customConfig }),
+  getTelemetryLogs: (params = {}) => {
+    const searchParams = new URLSearchParams(params);
+    const qs = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return request(`/telemetry/logs${qs}`);
+  }
 };
 
 export default api;
